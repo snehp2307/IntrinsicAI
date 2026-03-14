@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Prediction History — FinRisk Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+</head>
+<body>
+<div class="noise"></div>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-text">FinRisk<span class="brand-accent">Intelligence</span></span>
+  </div>
+  <div class="nav-right">
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/predict" class="nav-link">Predict</a>
+    <a href="/history" class="nav-link active">History</a>
+    <a href="/logout" class="nav-link">Logout</a>
+  </div>
+</nav>
+
+<main style="max-width:1100px;margin:2rem auto;padding:0 1.5rem;">
+  <h1 style="font-size:1.6rem;font-weight:700;margin-bottom:.3rem;">Prediction History</h1>
+  <p style="color:#8892a4;margin-bottom:2rem;">All your company predictions, newest first.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div style="padding:.75rem 1rem;border-radius:6px;margin-bottom:1rem;background:#3b82f620;color:#3b82f6;border:1px solid #3b82f640;">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if predictions %}
+  <div class="card">
+    <div class="table-wrap">
+      <table class="risk-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Company</th>
+            <th>Risk Score</th>
+            <th>Risk Level</th>
+            <th>Probability</th>
+            <th>Date</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in predictions %}
+          <tr>
+            <td class="mono dim">{{ loop.index }}</td>
+            <td>{{ p['company_name'] }}</td>
+            <td>
+              <span class="score-pill {{ 'score-high' if p['probability'] >= 60 else 'score-med' if p['probability'] >= 30 else 'score-low' }}">
+                {{ p['probability'] }}%
+              </span>
+            </td>
+            <td>
+              <span class="risk-badge {{ 'badge-high' if p['risk_level'] == 'HIGH' else 'badge-med' if p['risk_level'] == 'MODERATE' else 'badge-low' }}">
+                {{ p['risk_level'] }}
+              </span>
+            </td>
+            <td class="mono">{{ p['probability'] }}%</td>
+            <td class="mono dim" style="font-size:.8rem;">{{ p['created_at'][:16] }}</td>
+            <td><a href="/result/{{ p['id'] }}" class="btn-view">View →</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card" style="text-align:center;padding:3rem;">
+    <div style="font-size:2rem;margin-bottom:1rem;">📋</div>
+    <p style="color:#8892a4;">No predictions yet.</p>
+    <a href="/predict" style="display:inline-block;margin-top:1rem;padding:.7rem 1.5rem;background:#3b82f6;color:#fff;border-radius:6px;text-decoration:none;font-weight:600;">Run First Prediction →</a>
+  </div>
+  {% endif %}
+</main>
+
+<footer class="footer">
+  <span>FinRisk Intelligence © 2024</span>
+</footer>
+</body>
+</html>

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>FinRisk — User Submissions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.page-wrap{padding:2rem 2.5rem}
+.sub-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.sub-table th{font-family:var(--mono);font-size:.68rem;color:var(--text-mute);text-transform:uppercase;
+  letter-spacing:.08em;padding:.55rem .8rem;border-bottom:2px solid var(--border);text-align:left}
+.sub-table td{padding:.55rem .8rem;border-bottom:1px solid var(--border);vertical-align:middle}
+.sub-table tr:hover td{background:var(--bg-hover)}
+.sub-table .mono{font-family:var(--mono);font-size:.78rem}
+.model-card{background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+  padding:1.5rem 2rem;margin-bottom:1.5rem;display:grid;grid-template-columns:repeat(4,1fr);gap:1rem}
+.mc-item{text-align:center}
+.mc-val{font-family:var(--mono);font-size:1.6rem;font-weight:700;color:var(--amber)}
+.mc-lbl{font-size:.72rem;color:var(--text-mute);margin-top:.2rem}
+.imp-bar-row{display:flex;align-items:center;gap:.8rem;padding:.35rem 0;border-bottom:1px solid var(--border)}
+.imp-bar-lbl{font-family:var(--mono);font-size:.75rem;width:160px;flex-shrink:0}
+.imp-bar-track{flex:1;height:7px;background:var(--border);border-radius:4px;overflow:hidden}
+.imp-bar-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#6366f1,#a78bfa)}
+.imp-pct{font-family:var(--mono);font-size:.72rem;color:var(--text-dim);width:40px;text-align:right}
+.empty-state{text-align:center;padding:3rem;color:var(--text-mute);font-family:var(--mono);font-size:.82rem}
+.tag{display:inline-block;font-family:var(--mono);font-size:.65rem;padding:.15rem .5rem;border-radius:3px;font-weight:600}
+.tag-retrain{background:#6366f122;color:#6366f1;border:1px solid #6366f144}
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<nav class="navbar">
+  <div class="nav-brand">
+    <a href="/" style="text-decoration:none;display:flex;align-items:center;gap:.5rem">
+      <span class="brand-icon">◈</span>
+      <span class="brand-text">FinRisk<span class="brand-accent">Intelligence</span></span>
+    </a>
+  </div>
+  <div class="nav-right">
+    <a href="/" class="nav-link">Dashboard</a>
+    <a href="/predict" class="nav-link">Predict</a>
+    <a href="/xai" class="nav-link">XAI</a>
+    <a href="/submissions" class="nav-link active">Submissions</a>
+  </div>
+</nav>
+
+<div class="hero-strip" style="padding:1.5rem 2.5rem">
+  <p class="hero-label">Data Layer</p>
+  <h1 class="hero-title" style="font-size:1.6rem">User Submissions &amp; <span class="hero-accent">Adaptive Model</span></h1>
+  <p class="hero-sub">Every prediction you make is saved and used to retrain the ML model in real time.</p>
+</div>
+
+<div class="page-wrap">
+
+  <!-- Adaptive model status -->
+  <div class="card" style="margin-bottom:1.5rem">
+    <div class="card-header">
+      <span class="card-icon" style="color:#6366f1">◈</span>
+      <h2 class="card-title">Adaptive Model Status</h2>
+      <span class="card-subtitle">GradientBoosting — retrained after every new submission</span>
+      <span class="tag tag-retrain" id="statusTag" style="margin-left:auto">Loading…</span>
+    </div>
+    <div class="model-card" id="modelStats">
+      <div class="mc-item"><div class="mc-val" id="msTrained">—</div><div class="mc-lbl">Trained</div></div>
+      <div class="mc-item"><div class="mc-val" id="msSamples">—</div><div class="mc-lbl">Training Samples</div></div>
+      <div class="mc-item"><div class="mc-val" id="msUser">—</div><div class="mc-lbl">User Submissions</div></div>
+      <div class="mc-item"><div class="mc-val" id="msTotal">—</div><div class="mc-lbl">Saved Entries</div></div>
+    </div>
+
+    <div style="margin-top:1rem">
+      <div style="font-family:var(--mono);font-size:.72rem;color:var(--text-mute);margin-bottom:.6rem;text-transform:uppercase;letter-spacing:.08em">
+        Model Feature Importances (GBM)
+      </div>
+      <div id="importanceBars"></div>
+    </div>
+
+    <div style="margin-top:1rem;padding:.75rem 1rem;background:var(--bg-card2);border:1px solid var(--border-lite);border-radius:4px;font-size:.82rem;color:var(--text-dim);line-height:1.7">
+      <b>How it works:</b> When you submit a company via the Predict page, the data is stored in
+      <code>data/user_companies.csv</code>. The adaptive model is a GradientBoostingRegressor trained on
+      the 5,000-company base dataset <em>plus your submissions (weighted 3×)</em>. The final risk score
+      shown on the Predict page is a blend: <b>60% rule-based + 40% ML model</b>. As you add more
+      submissions, the ML component adapts to your data's patterns.
+    </div>
+  </div>
+
+  <!-- Submissions table -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">▣</span>
+      <h2 class="card-title">Saved Submissions</h2>
+      <span class="card-subtitle" id="subCount">Loading…</span>
+      <button onclick="loadData()" style="margin-left:auto;font-family:var(--mono);font-size:.72rem;
+        padding:.3rem .8rem;background:transparent;border:1px solid var(--border);color:var(--text-dim);
+        border-radius:3px;cursor:pointer">↻ Refresh</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="sub-table">
+        <thead>
+          <tr>
+            <th>#</th><th>Submitted</th><th>Company</th>
+            <th>Risk Score</th><th>Category</th><th>Altman Z</th>
+            <th>Curr. Ratio</th><th>D/E</th><th>Profit Margin</th>
+            <th>Int. Coverage</th>
+          </tr>
+        </thead>
+        <tbody id="subTableBody">
+          <tr><td colspan="10" class="empty-state">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div id="emptyState" class="empty-state" style="display:none">
+      No submissions yet. Go to <a href="/predict" style="color:var(--amber)">Predict</a> and analyse a company.
+    </div>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <span>FinRisk Intelligence © 2024</span>
+  <span class="footer-sep">|</span>
+  <span>User data stored locally in data/user_companies.csv</span>
+</footer>
+
+<script>
+async function loadData() {
+  const res  = await fetch("/api/submissions");
+  const data = await res.json();
+  const subs = data.submissions;
+  const mdl  = data.model;
+
+  // model status
+  document.getElementById("statusTag").textContent = mdl.trained ? "✓ Trained" : "Pending";
+  document.getElementById("msTrained").textContent = mdl.trained ? "Yes" : "No";
+  document.getElementById("msSamples").textContent = mdl.n_samples.toLocaleString();
+  document.getElementById("msUser").textContent    = mdl.n_user;
+  document.getElementById("msTotal").textContent   = data.total;
+  document.getElementById("subCount").textContent  = `${data.total} total entries`;
+
+  // importance bars
+  const imps  = Object.entries(mdl.importances || {}).sort((a,b)=>b[1]-a[1]);
+  const maxImp= imps.length ? imps[0][1] : 1;
+  document.getElementById("importanceBars").innerHTML = imps.map(([feat,pct]) => `
+    <div class="imp-bar-row">
+      <span class="imp-bar-lbl">${feat.replace(/_/g,' ')}</span>
+      <div class="imp-bar-track"><div class="imp-bar-fill" style="width:${(pct/maxImp*100).toFixed(0)}%"></div></div>
+      <span class="imp-pct">${pct.toFixed(1)}%</span>
+    </div>
+  `).join("") || '<div style="font-family:var(--mono);font-size:.78rem;color:var(--text-mute)">No importance data yet</div>';
+
+  // table
+  const tbody = document.getElementById("subTableBody");
+  if (!subs.length) {
+    tbody.innerHTML = "";
+    document.getElementById("emptyState").style.display = "block";
+    return;
+  }
+  document.getElementById("emptyState").style.display = "none";
+
+  tbody.innerHTML = subs.map((s,i) => {
+    const catCls = s.risk_category==="High Risk"?"badge-high":s.risk_category==="Medium Risk"?"badge-med":"badge-low";
+    const ts     = s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "—";
+    const fmt    = v => v === null || v === undefined ? "—" : (typeof v==="number" ? v.toFixed(3) : v);
+    const scoreCl= (s.risk_score||0)>=60?"score-high":(s.risk_score||0)>=33?"score-med":"score-low";
+    return `<tr>
+      <td class="mono">${i+1}</td>
+      <td class="mono" style="font-size:.72rem;color:var(--text-mute)">${ts}</td>
+      <td><b>${s.company_name}</b></td>
+      <td><span class="score-pill ${scoreCl}">${fmt(s.risk_score)}</span></td>
+      <td><span class="risk-badge ${catCls}">${s.risk_category}</span></td>
+      <td class="mono">${fmt(s.altman_z)}</td>
+      <td class="mono">${fmt(s.current_ratio)}</td>
+      <td class="mono">${fmt(s.debt_to_equity)}</td>
+      <td class="mono">${s.profit_margin!==null&&s.profit_margin!==undefined ? (s.profit_margin*100).toFixed(2)+"%" : "—"}</td>
+      <td class="mono">${fmt(s.interest_coverage)}</td>
+    </tr>`;
+  }).join("");
+}
+
+loadData();
+</script>
+</body>
+</html>

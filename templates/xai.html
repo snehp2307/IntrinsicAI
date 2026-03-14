@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FinRisk Intelligence — Explainable AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── XAI-specific styles ── */
+.xai-hero {
+  padding: 2rem 3rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(135deg, #0b0f1a 0%, #0d1320 100%);
+  position: relative; overflow: hidden;
+}
+.xai-hero::before {
+  content:"";position:absolute;width:500px;height:500px;
+  background:radial-gradient(ellipse,#6366f108 0%,transparent 70%);
+  top:-200px;right:0;pointer-events:none;
+}
+.xai-label { font-family:var(--mono);font-size:.7rem;color:#6366f1;letter-spacing:.15em;text-transform:uppercase;margin-bottom:.4rem; }
+.xai-title { font-size:1.8rem;font-weight:700;margin-bottom:.5rem; }
+.xai-accent { color:#6366f1; }
+.xai-sub   { font-family:var(--mono);font-size:.75rem;color:var(--text-dim); }
+
+/* Company search panel */
+.company-search-panel {
+  background:var(--bg-card);border:1px solid var(--border);border-radius:8px;
+  padding:1.5rem;margin-bottom:1.5rem;
+}
+.csp-row { display:flex;gap:.8rem;align-items:center;flex-wrap:wrap; }
+.csp-row input {
+  flex:1;background:var(--bg-card2);border:1px solid var(--border-lite);
+  border-radius:4px;color:var(--text);font-family:var(--mono);font-size:.82rem;
+  padding:.5rem .9rem;outline:none;transition:border-color .2s;min-width:200px;
+}
+.csp-row input:focus { border-color:#6366f1; }
+.csp-row button {
+  background:#6366f122;border:1px solid #6366f155;color:#6366f1;
+  font-family:var(--mono);font-size:.8rem;padding:.5rem 1.2rem;
+  border-radius:4px;cursor:pointer;transition:all .2s;white-space:nowrap;
+}
+.csp-row button:hover { background:#6366f133; }
+.csp-dropdown {
+  position:relative;
+}
+.csp-results {
+  position:absolute;top:calc(100% + 4px);left:0;right:0;
+  background:var(--bg-card2);border:1px solid var(--border-lite);
+  border-radius:4px;z-index:50;overflow:hidden;
+}
+.csp-item {
+  display:flex;justify-content:space-between;padding:.5rem .9rem;
+  font-size:.82rem;cursor:pointer;border-bottom:1px solid var(--border);
+  transition:background .15s;
+}
+.csp-item:last-child{border-bottom:none;}
+.csp-item:hover{background:var(--bg-hover);}
+
+/* Method tabs */
+.xai-tabs {
+  display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.5rem;
+}
+.xai-tab {
+  font-family:var(--mono);font-size:.78rem;padding:.6rem 1.3rem;
+  cursor:pointer;color:var(--text-dim);border-bottom:2px solid transparent;
+  margin-bottom:-2px;transition:all .2s;
+}
+.xai-tab.active { color:#6366f1;border-bottom-color:#6366f1; }
+.xai-tab:hover  { color:var(--text); }
+.xai-panel { display:none; }
+.xai-panel.active { display:block; }
+
+/* Global importance bar */
+.gi-bar-row {
+  display:flex;align-items:center;gap:1rem;padding:.6rem 0;
+  border-bottom:1px solid var(--border);
+}
+.gi-rank  { font-family:var(--mono);font-size:.72rem;color:var(--text-mute);width:1.5rem;text-align:right; }
+.gi-label { font-weight:600;font-size:.85rem;flex:0 0 160px; }
+.gi-bar-wrap { flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden; }
+.gi-bar-fill { height:100%;border-radius:4px;transition:width .8s ease; }
+.gi-pct   { font-family:var(--mono);font-size:.75rem;color:var(--text-dim);width:50px;text-align:right; }
+.gi-type  { font-family:var(--mono);font-size:.65rem;padding:.15rem .4rem;border-radius:3px;width:70px;text-align:center; }
+.gi-type.mdi  { background:#6366f122;color:#6366f1;border:1px solid #6366f144; }
+.gi-type.perm { background:#f59e0b22;color:var(--amber);border:1px solid #f59e0b44; }
+
+/* Waterfall chart */
+.waterfall-wrap { overflow-x:auto; }
+.waterfall-bars { display:flex;gap:2px;align-items:flex-end;min-width:600px;height:240px;position:relative;padding:0 1rem; }
+.wf-col { display:flex;flex-direction:column;align-items:center;flex:1;min-width:60px;height:100%;justify-content:flex-end; }
+.wf-bar-container { width:100%;position:relative;display:flex;flex-direction:column;justify-content:flex-end; }
+.wf-bar { width:100%;border-radius:3px 3px 0 0;transition:height .8s ease;position:relative; }
+.wf-bar-label { font-family:var(--mono);font-size:.62rem;color:var(--text-dim);text-align:center;margin-top:.3rem;word-break:break-word;line-height:1.2; }
+.wf-val { font-family:var(--mono);font-size:.7rem;font-weight:600;position:absolute;top:-18px;left:50%;transform:translateX(-50%);white-space:nowrap; }
+.wf-baseline-line { position:absolute;left:0;right:0;border-top:2px dashed var(--text-mute);pointer-events:none; }
+
+/* Contribution cards */
+.contrib-grid { display:grid;grid-template-columns:repeat(2,1fr);gap:.7rem; }
+.contrib-card {
+  background:var(--bg-card2);border:1px solid var(--border);border-radius:5px;
+  padding:.8rem 1rem;border-left:3px solid;
+}
+.contrib-card.positive { border-left-color:var(--red); }
+.contrib-card.negative { border-left-color:var(--green); }
+.contrib-card.neutral  { border-left-color:var(--border-lite); }
+.cc-header { display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem; }
+.cc-name   { font-weight:600;font-size:.85rem; }
+.cc-delta  { font-family:var(--mono);font-size:.88rem;font-weight:700; }
+.cc-bar-w  { height:4px;background:var(--border);border-radius:2px;margin:.4rem 0; }
+.cc-bar-f  { height:100%;border-radius:2px;transition:width .8s; }
+.cc-meta   { font-family:var(--mono);font-size:.7rem;color:var(--text-dim); }
+
+/* Counterfactual cards */
+.cf-card {
+  background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;
+  padding:1rem 1.2rem;margin-bottom:.8rem;border-left:3px solid;
+}
+.cf-card.critical { border-left-color:var(--red); }
+.cf-card.high     { border-left-color:var(--amber); }
+.cf-card.medium   { border-left-color:#6366f1; }
+.cf-header { display:flex;align-items:center;gap:.8rem;margin-bottom:.6rem;flex-wrap:wrap; }
+.cf-label  { font-weight:700;font-size:.9rem;flex:1; }
+.cf-priority { font-family:var(--mono);font-size:.65rem;padding:.2rem .5rem;border-radius:3px; }
+.cf-priority.critical { background:#ef444422;color:var(--red);border:1px solid #ef444433; }
+.cf-priority.high     { background:#f59e0b22;color:var(--amber);border:1px solid #f59e0b33; }
+.cf-priority.medium   { background:#6366f122;color:#6366f1;border:1px solid #6366f133; }
+.cf-improvement { font-family:var(--mono);font-size:.82rem;font-weight:600;color:var(--green); }
+.cf-values { display:flex;align-items:center;gap:1rem;margin:.6rem 0; }
+.cf-from   { font-family:var(--mono);font-size:.82rem;color:var(--red); }
+.cf-arrow  { color:var(--text-mute); }
+.cf-to     { font-family:var(--mono);font-size:.82rem;color:var(--green); }
+.cf-action { font-size:.82rem;color:var(--text-dim);line-height:1.6; }
+.cf-sub-change { display:flex;gap:1rem;margin:.4rem 0; }
+.cf-sub-item { font-family:var(--mono);font-size:.72rem;color:var(--text-mute); }
+
+/* Factor story cards */
+.story-card {
+  background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;
+  padding:1rem 1.2rem;margin-bottom:.7rem;
+}
+.story-header { display:flex;align-items:center;gap:.7rem;margin-bottom:.5rem; }
+.story-signal-dot { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
+.story-label  { font-weight:600;font-size:.9rem;flex:1; }
+.story-sub    { font-family:var(--mono);font-size:.78rem;padding:.15rem .5rem;border-radius:3px; }
+.story-narrative { font-size:.85rem;color:var(--text);line-height:1.65;margin-bottom:.5rem; }
+.story-contrib { font-family:var(--mono);font-size:.75rem; }
+
+/* Loading state */
+.xai-loading { text-align:center;padding:3rem;color:var(--text-mute);font-family:var(--mono);font-size:.82rem; }
+.xai-loading .spin { width:28px;height:28px;border:2px solid var(--border-lite);border-top-color:#6366f1;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto .75rem; }
+
+/* Methodology box */
+.method-box {
+  background:var(--bg-card2);border:1px solid var(--border-lite);border-left:3px solid #6366f1;
+  border-radius:4px;padding:.9rem 1.1rem;font-family:var(--mono);font-size:.75rem;
+  color:var(--text-dim);line-height:1.7;
+}
+
+@media(max-width:700px){
+  .contrib-grid{grid-template-columns:1fr;}
+  .gi-label{flex:0 0 120px;}
+}
+</style>
+</head>
+<body>
+<div class="noise"></div>
+
+<!-- NAV -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <a href="/" style="text-decoration:none;display:flex;align-items:center;gap:.5rem">
+      <span class="brand-icon">◈</span>
+      <span class="brand-text">FinRisk<span class="brand-accent">Intelligence</span></span>
+    </a>
+  </div>
+  <div class="nav-right">
+    <a href="/"       class="nav-link">Dashboard</a>
+    <a href="/predict"class="nav-link">Predict</a>
+    <a href="/xai"    class="nav-link active">XAI</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="xai-hero">
+  <p class="xai-label">Explainable Artificial Intelligence</p>
+  <h1 class="xai-title">Model <span class="xai-accent">Transparency</span> Center</h1>
+  <p class="xai-sub">Global feature importance · Local contributions · Counterfactual analysis · Plain-language narratives</p>
+</div>
+
+<main class="main-grid">
+
+  <!-- GLOBAL IMPORTANCE -->
+  <section class="grid-row one-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon" style="color:#6366f1">◈</span>
+        <h2 class="card-title">Global Feature Importance</h2>
+        <span class="card-subtitle">GradientBoosting MDI + Permutation Importance across 5,000 companies</span>
+      </div>
+
+      <div id="globalLoading" class="xai-loading"><div class="spin"></div>Computing importances…</div>
+      <div id="globalContent" style="display:none">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
+          <div>
+            <div class="chart-wrap" style="height:280px"><canvas id="importanceBar"></canvas></div>
+          </div>
+          <div>
+            <div class="chart-wrap" style="height:280px"><canvas id="importanceRadar"></canvas></div>
+          </div>
+        </div>
+        <div id="importanceRows"></div>
+        <div class="method-box" style="margin-top:1rem">
+          <b>Methodology:</b> A GradientBoostingRegressor (200 estimators, depth=4) is trained on the 5,000-company dataset using 9 financial ratios to predict risk scores. MDI importance measures average impurity reduction per feature. Permutation importance measures score degradation when a feature is randomly shuffled — more reliable but slower. Final ranking uses a 50/50 ensemble of both methods.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- COMPANY-LEVEL XAI -->
+  <section class="grid-row one-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon" style="color:#6366f1">⬡</span>
+        <h2 class="card-title">Company-Level XAI Analysis</h2>
+        <span class="card-subtitle">Select any company to see local explanations</span>
+      </div>
+
+      <!-- Search -->
+      <div class="company-search-panel" style="padding:1rem;margin-bottom:1rem">
+        <div class="csp-row">
+          <div class="csp-dropdown" style="flex:1">
+            <input type="text" id="companyInput" placeholder="Type company name e.g. INFOSYS, TATACONS…" autocomplete="off"/>
+            <div id="cspResults" class="csp-results" style="display:none"></div>
+          </div>
+          <button onclick="loadCompanyXAI()">Explain →</button>
+        </div>
+      </div>
+
+      <!-- Company XAI loading -->
+      <div id="companyXAILoading" class="xai-loading" style="display:none"><div class="spin"></div>Building explanation…</div>
+
+      <!-- Placeholder -->
+      <div id="companyXAIPlaceholder" style="text-align:center;padding:2.5rem;color:var(--text-mute);font-family:var(--mono);font-size:.82rem;">
+        <div style="font-size:2rem;opacity:.2;margin-bottom:.75rem">⬡</div>
+        Search for a company above to see its full XAI breakdown
+      </div>
+
+      <!-- Content -->
+      <div id="companyXAIContent" style="display:none">
+
+        <!-- Company header -->
+        <div id="xaiCompanyHeader" style="margin-bottom:1.5rem"></div>
+
+        <!-- Tabs -->
+        <div class="xai-tabs">
+          <div class="xai-tab active" onclick="showTab('contributions')">📊 Contributions</div>
+          <div class="xai-tab" onclick="showTab('waterfall')">🌊 Waterfall</div>
+          <div class="xai-tab" onclick="showTab('narratives')">📖 Narratives</div>
+          <div class="xai-tab" onclick="showTab('counterfactuals')">🎯 What-If</div>
+          <div class="xai-tab" onclick="showTab('shap')">🔮 SHAP</div>
+          <div class="xai-tab" onclick="showTab('lime')">🔍 LIME</div>
+          <div class="xai-tab" onclick="showTab('dice')">🎲 DiCE</div>
+        </div>
+
+        <!-- Panel: Contributions -->
+        <div class="xai-panel active" id="panel-contributions">
+          <p style="font-family:var(--mono);font-size:.75rem;color:var(--text-mute);margin-bottom:1rem">
+            Each bar shows how much a feature <span style="color:var(--red)">increases ↑</span> or
+            <span style="color:var(--green)">decreases ↓</span> this company's risk score relative to the
+            population average of <b id="baselineVal">—</b>/100.
+          </p>
+          <div class="chart-wrap" style="height:320px"><canvas id="contributionChart"></canvas></div>
+          <div class="contrib-grid" id="contributionCards" style="margin-top:1.2rem"></div>
+        </div>
+
+        <!-- Panel: Waterfall -->
+        <div class="xai-panel" id="panel-waterfall">
+          <p style="font-family:var(--mono);font-size:.75rem;color:var(--text-mute);margin-bottom:1rem">
+            Starting from the population baseline, each step shows how individual features
+            push the score to its final value.
+          </p>
+          <div class="chart-wrap" style="height:360px"><canvas id="waterfallChart"></canvas></div>
+          <div id="waterfallLegend" style="margin-top:.75rem;font-family:var(--mono);font-size:.72rem;color:var(--text-mute);text-align:center"></div>
+        </div>
+
+        <!-- Panel: Narratives -->
+        <div class="xai-panel" id="panel-narratives">
+          <div id="summaryBox" style="margin-bottom:1.2rem"></div>
+          <div id="factorStories"></div>
+          <div id="altmanComment" style="margin-top:1rem"></div>
+          <div id="globalComment" style="margin-top:.7rem"></div>
+        </div>
+
+        <!-- Panel: What-If / Counterfactuals -->
+        <div class="xai-panel" id="panel-counterfactuals">
+          <p style="font-family:var(--mono);font-size:.75rem;color:var(--text-mute);margin-bottom:1rem">
+            For each high-risk factor, what value would this company need to achieve in order
+            to meaningfully reduce its risk score? Each card shows the specific target and
+            estimated score improvement.
+          </p>
+          <div id="counterfactualCards"></div>
+          <div id="cfNoData" style="display:none;text-align:center;padding:2rem;font-family:var(--mono);font-size:.82rem;color:var(--text-mute)">
+            ✓ No critical factors requiring improvement — this company is in good financial health.
+          </div>
+        </div>
+
+        <!-- SHAP panel -->
+        <div class="xai-panel" id="panel-shap">
+          <div id="shapNarrativeXai" style="background:var(--bg-card2);border:1px solid var(--border-lite);border-left:3px solid #a78bfa;border-radius:4px;padding:.9rem 1.1rem;font-size:.85rem;line-height:1.75;margin-bottom:1rem">
+            <em style="color:var(--text-mute)">Load a company to see Kernel SHAP values.</em>
+          </div>
+          <p style="font-family:var(--mono);font-size:.73rem;color:var(--text-mute);margin-bottom:.8rem">
+            SHAP value = signed contribution of each feature to this company's score vs the population baseline.
+            Computed via Kernel SHAP: a coalitional game-theoretic attribution method.
+          </p>
+          <div class="chart-wrap" style="height:300px"><canvas id="shapChartXai"></canvas></div>
+          <div id="shapTableXai" style="margin-top:.8rem;display:flex;flex-direction:column;gap:.3rem"></div>
+        </div>
+
+        <!-- LIME panel -->
+        <div class="xai-panel" id="panel-lime">
+          <div id="limeNarrativeXai" style="background:var(--bg-card2);border:1px solid var(--border-lite);border-left:3px solid #22d3ee;border-radius:4px;padding:.9rem 1.1rem;font-size:.85rem;line-height:1.75;margin-bottom:1rem">
+            <em style="color:var(--text-mute)">Load a company to see LIME explanation.</em>
+          </div>
+          <p style="font-family:var(--mono);font-size:.73rem;color:var(--text-mute);margin-bottom:.8rem">
+            LIME fits a weighted local linear model near this company's feature vector (800 perturbed samples,
+            kernel bandwidth σ=0.75). R² measures local surrogate fidelity.
+          </p>
+          <div class="chart-wrap" style="height:300px"><canvas id="limeChartXai"></canvas></div>
+          <div id="limeTableXai" style="margin-top:.8rem;display:flex;flex-direction:column;gap:.3rem"></div>
+        </div>
+
+        <!-- DiCE panel -->
+        <div class="xai-panel" id="panel-dice">
+          <div id="diceNarrativeXai" style="background:var(--bg-card2);border:1px solid var(--border-lite);border-left:3px solid #f59e0b;border-radius:4px;padding:.9rem 1.1rem;font-size:.85rem;line-height:1.75;margin-bottom:1rem">
+            <em style="color:var(--text-mute)">Load a company to see DiCE counterfactuals.</em>
+          </div>
+          <p style="font-family:var(--mono);font-size:.73rem;color:var(--text-mute);margin-bottom:.8rem">
+            DiCE generates diverse minimal-change counterfactuals via genetic search. Each path shows
+            the smallest set of financial changes needed to move to a lower risk category.
+          </p>
+          <div id="diceCardsXai"></div>
+          <div id="diceNoData" style="display:none;text-align:center;padding:1.5rem;font-family:var(--mono);font-size:.82rem;color:var(--text-mute)">
+            ✓ Company is already Low Risk — no counterfactuals needed.
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span>FinRisk Intelligence © 2024</span>
+  <span class="footer-sep">|</span>
+  <span>XAI: GradientBoosting · Permutation Importance · Local Decomposition · Counterfactuals</span>
+</footer>
+
+<script>
+Chart.defaults.color = "#8892a4";
+Chart.defaults.font.family = "IBM Plex Mono";
+Chart.defaults.plugins.tooltip.backgroundColor = "#0f1524";
+Chart.defaults.plugins.tooltip.borderColor = "#2a3550";
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+
+let importanceChart, importanceRadarChart, contribChart, wfChart;
+let currentCompanyData = null;
+
+// ── Load global importance on page load ──────────────────────────────────────
+async function loadGlobalImportance() {
+  const res  = await fetch("/api/xai/global");
+  const data = await res.json();
+  document.getElementById("globalLoading").style.display = "none";
+  document.getElementById("globalContent").style.display = "block";
+  renderGlobalImportance(data.importance);
+}
+
+function renderGlobalImportance(items) {
+  const maxCombined = Math.max(...items.map(i => i.combined_score));
+
+  // Bar chart
+  const ctx1 = document.getElementById("importanceBar").getContext("2d");
+  if (importanceChart) importanceChart.destroy();
+  importanceChart = new Chart(ctx1, {
+    type: "bar",
+    data: {
+      labels: items.map(i => i.label),
+      datasets: [
+        {
+          label: "MDI Importance %",
+          data: items.map(i => i.mdi_importance),
+          backgroundColor: "#6366f155", borderColor: "#6366f1", borderWidth: 1.5, borderRadius: 3,
+        },
+        {
+          label: "Permutation Importance %",
+          data: items.map(i => i.perm_importance),
+          backgroundColor: "#f59e0b55", borderColor: "#f59e0b", borderWidth: 1.5, borderRadius: 3,
+        },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      plugins: {
+        legend: { labels: { color:"#8892a4", font:{family:"IBM Plex Mono",size:10}, padding:12 } },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.x.toFixed(1)}%` } }
+      },
+      scales: {
+        x: { grid:{color:"#1a2035"}, ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9}}, title:{display:true,text:"Importance %",color:"#4a5568"} },
+        y: { grid:{color:"#1a2035"}, ticks:{color:"#e2e8f0",font:{family:"IBM Plex Mono",size:9}} }
+      },
+      animation: { duration: 900 }
+    }
+  });
+
+  // Radar
+  const ctx2 = document.getElementById("importanceRadar").getContext("2d");
+  if (importanceRadarChart) importanceRadarChart.destroy();
+  importanceRadarChart = new Chart(ctx2, {
+    type: "radar",
+    data: {
+      labels: items.map(i => i.label),
+      datasets: [
+        { label:"MDI",   data:items.map(i=>i.mdi_importance),  backgroundColor:"#6366f133",borderColor:"#6366f1",borderWidth:2,pointRadius:3 },
+        { label:"Perm.", data:items.map(i=>i.perm_importance), backgroundColor:"#f59e0b22",borderColor:"#f59e0b",borderWidth:2,pointRadius:3 },
+      ]
+    },
+    options: {
+      responsive:true,maintainAspectRatio:false,
+      scales:{ r:{ grid:{color:"#1e2433"},angleLines:{color:"#1e2433"},ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:8},backdropColor:"transparent"},pointLabels:{color:"#8892a4",font:{family:"IBM Plex Mono",size:8}} } },
+      plugins:{ legend:{labels:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9},padding:10}} },
+      animation:{duration:900}
+    }
+  });
+
+  // Importance rows
+  document.getElementById("importanceRows").innerHTML = items.map((item, i) => {
+    const pct = (item.combined_score / maxCombined * 100).toFixed(0);
+    const col = i < 3 ? "#ef4444" : i < 6 ? "#f59e0b" : "#22c55e";
+    return `
+      <div class="gi-bar-row fade-in" style="animation-delay:${i*50}ms">
+        <span class="gi-rank">${item.rank}</span>
+        <span class="gi-label">${item.label}</span>
+        <div class="gi-bar-wrap">
+          <div class="gi-bar-fill" style="width:${pct}%;background:${col};opacity:.8"></div>
+        </div>
+        <span class="gi-pct">${item.combined_score.toFixed(1)}%</span>
+        <span class="gi-type mdi"  title="MDI">MDI: ${item.mdi_importance.toFixed(1)}%</span>
+        <span class="gi-type perm" title="Permutation">Perm: ${item.perm_importance.toFixed(1)}%</span>
+      </div>
+    `;
+  }).join("");
+}
+
+// ── Company search ────────────────────────────────────────────────────────────
+const compInput = document.getElementById("companyInput");
+const cspResults = document.getElementById("cspResults");
+let searchTimer;
+
+compInput.addEventListener("input", e => {
+  clearTimeout(searchTimer);
+  const q = e.target.value.trim();
+  if (q.length < 2) { cspResults.style.display="none"; return; }
+  searchTimer = setTimeout(async () => {
+    const res  = await fetch("/api/search?q=" + encodeURIComponent(q));
+    const data = await res.json();
+    if (!data.results.length) { cspResults.style.display="none"; return; }
+    cspResults.innerHTML = data.results.map(r => `
+      <div class="csp-item" onclick="selectCompany('${r.company_name}')">
+        <span>${r.company_name}</span>
+        <span class="score-pill ${r.risk_score>=60?'score-high':r.risk_score>=33?'score-med':'score-low'}">${r.risk_score}</span>
+      </div>
+    `).join("");
+    cspResults.style.display = "block";
+  }, 280);
+});
+
+document.addEventListener("click", e => {
+  if (!compInput.contains(e.target)) cspResults.style.display="none";
+});
+
+function selectCompany(name) {
+  compInput.value = name;
+  cspResults.style.display = "none";
+  loadCompanyXAI();
+}
+
+async function loadCompanyXAI() {
+  const name = compInput.value.trim();
+  if (!name) return;
+
+  document.getElementById("companyXAIPlaceholder").style.display = "none";
+  document.getElementById("companyXAIContent").style.display = "none";
+  document.getElementById("companyXAILoading").style.display = "block";
+
+  const res  = await fetch("/api/xai/company/" + encodeURIComponent(name));
+  const data = await res.json();
+
+  document.getElementById("companyXAILoading").style.display = "none";
+
+  if (data.error) {
+    document.getElementById("companyXAIPlaceholder").style.display = "block";
+    document.getElementById("companyXAIPlaceholder").innerHTML = `<div style="color:var(--red);font-family:var(--mono)">Company "${name}" not found in dataset.</div>`;
+    return;
+  }
+
+  currentCompanyData = data;
+  document.getElementById("companyXAIContent").style.display = "block";
+  renderCompanyXAI(data);
+  showTab("contributions");
+}
+
+function renderCompanyXAI(d) {
+  const catCls = d.risk_category==="High Risk"?"badge-high":d.risk_category==="Medium Risk"?"badge-med":"badge-low";
+  document.getElementById("xaiCompanyHeader").innerHTML = `
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+      <h3 style="font-size:1.3rem;font-weight:700">${d.company_name}</h3>
+      <span class="risk-badge ${catCls} big-badge">${d.risk_category}</span>
+      <span style="font-family:var(--mono);font-size:.82rem">Score: <b>${d.risk_score}</b>/100</span>
+      <span style="font-family:var(--mono);font-size:.78rem;color:var(--text-mute)">Population avg: ${d.baseline_score}/100</span>
+      <a href="/company/${encodeURIComponent(d.company_name)}" class="btn-view" style="margin-left:auto">Full Profile →</a>
+    </div>
+  `;
+
+  document.getElementById("baselineVal").textContent = d.baseline_score;
+
+  renderContributions(d);
+  renderWaterfall(d);
+  renderNarratives(d);
+  renderCounterfactuals(d);
+  if (d.shap) renderXaiShap(d.shap);
+  if (d.lime) renderXaiLime(d.lime);
+  if (d.dice) renderXaiDice(d.dice);
+}
+
+// ── Contributions panel ───────────────────────────────────────────────────────
+function renderContributions(d) {
+  const contribs = d.contributions;
+
+  // Horizontal bar chart
+  const ctx = document.getElementById("contributionChart").getContext("2d");
+  if (contribChart) contribChart.destroy();
+  contribChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: contribs.map(c => c.label),
+      datasets: [{
+        label: "Risk Contribution (pts)",
+        data:  contribs.map(c => c.contribution),
+        backgroundColor: contribs.map(c => c.contribution > 0 ? "#ef444455" : "#22c55e55"),
+        borderColor:     contribs.map(c => c.contribution > 0 ? "#ef4444"   : "#22c55e"),
+        borderWidth: 1.5, borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label: ctx => {
+          const c = contribs[ctx.dataIndex];
+          return [
+            ` Contribution: ${ctx.parsed.x > 0 ? "+" : ""}${ctx.parsed.x.toFixed(2)} pts`,
+            ` Value: ${c.value.toFixed(3)}`,
+            ` Sub-score: ${c.sub_score}/10 (avg: ${c.mean_sub_score})`,
+          ];
+        }}}
+      },
+      scales: {
+        x: { grid:{color:"#1a2035"}, ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9}}, title:{display:true,text:"Score Impact (pts)",color:"#4a5568"} },
+        y: { grid:{color:"#1a2035"}, ticks:{color:"#e2e8f0",font:{family:"IBM Plex Mono",size:9}} }
+      },
+      animation: { duration:800 }
+    }
+  });
+
+  // Contribution cards
+  document.getElementById("contributionCards").innerHTML = contribs.map(c => {
+    const cls    = c.contribution > 0.5 ? "positive" : c.contribution < -0.5 ? "negative" : "neutral";
+    const col    = c.contribution > 0 ? "#ef4444" : "#22c55e";
+    const sign   = c.contribution > 0 ? "+" : "";
+    const pct    = Math.min(c.pct_of_total, 100);
+    return `
+      <div class="contrib-card ${cls}">
+        <div class="cc-header">
+          <span class="cc-name">${c.label}</span>
+          <span class="cc-delta" style="color:${col}">${sign}${c.contribution.toFixed(2)}</span>
+        </div>
+        <div class="cc-bar-w"><div class="cc-bar-f" style="width:${pct}%;background:${col}66"></div></div>
+        <div class="cc-meta">
+          Value: ${c.value.toFixed(3)} &nbsp;|&nbsp;
+          Sub-score: ${c.sub_score}/10 &nbsp;|&nbsp;
+          Avg: ${c.mean_sub_score}/10 &nbsp;|&nbsp;
+          ${c.pct_of_total.toFixed(1)}% of total impact
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// ── Waterfall panel ───────────────────────────────────────────────────────────
+function renderWaterfall(d) {
+  const wf  = d.waterfall;
+  const ctx = document.getElementById("waterfallChart").getContext("2d");
+  if (wfChart) wfChart.destroy();
+
+  // Build floating bar data: [bottom, top] per bar
+  const labels  = ["Baseline", ...wf.steps.map(s => s.label), "Final Score"];
+  const floats  = [];
+  const colors  = [];
+
+  // Baseline bar (0 to baseline)
+  floats.push([0, wf.baseline]);
+  colors.push("#6366f199");
+
+  // Step bars (floating)
+  wf.steps.forEach(s => {
+    const lo = Math.min(s.start, s.end);
+    const hi = Math.max(s.start, s.end);
+    floats.push([lo, hi]);
+    colors.push(s.delta > 0 ? "#ef444466" : "#22c55e66");
+  });
+
+  // Final bar (0 to final)
+  floats.push([0, wf.final_score]);
+  const fCol = wf.final_score >= 60 ? "#ef444499" : wf.final_score >= 33 ? "#f59e0b99" : "#22c55e99";
+  colors.push(fCol);
+
+  wfChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Score",
+        data: floats,
+        backgroundColor: colors,
+        borderColor: colors.map(c => c.slice(0,7)),
+        borderWidth: 1.5,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label: ctx => {
+          const v = ctx.parsed;
+          if (Array.isArray(v.y)) return ` ${v.y[0].toFixed(1)} → ${v.y[1].toFixed(1)} (Δ ${(v.y[1]-v.y[0]).toFixed(1)})`;
+          return ` Score: ${v.y.toFixed(1)}`;
+        }}}
+      },
+      scales: {
+        x: { grid:{color:"#1a2035"}, ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9},maxRotation:30} },
+        y: { min:0,max:100,grid:{color:"#1a2035"},ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9}},title:{display:true,text:"Risk Score",color:"#4a5568"} }
+      },
+      animation: { duration:900 }
+    }
+  });
+
+  document.getElementById("waterfallLegend").innerHTML =
+    `Baseline: <b>${wf.baseline}</b> &nbsp;→&nbsp; Final Score: <b style="color:${wf.final_score>=60?'var(--red)':wf.final_score>=33?'var(--amber)':'var(--green)'};">${wf.final_score}</b> &nbsp;|&nbsp; <span style="color:var(--red)">■ Increases risk</span> &nbsp; <span style="color:var(--green)">■ Reduces risk</span>`;
+}
+
+// ── Narratives panel ──────────────────────────────────────────────────────────
+function renderNarratives(d) {
+  const re = d.rich_explanation;
+
+  // Summary
+  document.getElementById("summaryBox").innerHTML = `
+    <div style="background:var(--bg-card2);border:1px solid var(--border-lite);border-left:3px solid #6366f1;border-radius:4px;padding:1rem 1.2rem;font-size:.9rem;line-height:1.75;margin-bottom:.5rem">
+      ${re.summary}
+    </div>
+  `;
+
+  // Factor stories
+  document.getElementById("factorStories").innerHTML = re.factor_stories.map(s => {
+    const dotCol = s.signal==="danger"?"var(--red)":s.signal==="warning"?"var(--amber)":"var(--green)";
+    const subCol = s.signal==="danger"?"high-txt":s.signal==="warning"?"warn-txt":"safe-txt";
+    const sign   = s.contribution > 0 ? "+" : "";
+    return `
+      <div class="story-card fade-in">
+        <div class="story-header">
+          <div class="story-signal-dot" style="background:${dotCol}"></div>
+          <span class="story-label">${s.label}</span>
+          <span class="story-sub ${subCol}">${s.sub_score}/10</span>
+          <span class="story-contrib" style="color:${s.contribution>0?'var(--red)':'var(--green)'}">
+            ${sign}${s.contribution.toFixed(2)} pts
+          </span>
+        </div>
+        <div class="story-narrative">${s.narrative}</div>
+        <div style="font-family:var(--mono);font-size:.72rem;color:var(--text-mute)">
+          Value: ${s.value.toFixed(4)} &nbsp;|&nbsp; ${s.direction.replace("_"," ")} &nbsp;|&nbsp; ${s.direction_flag === "increase" ? "↑ increases risk" : "↓ reduces risk"}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  // Altman
+  document.getElementById("altmanComment").innerHTML = `
+    <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:4px;padding:.85rem 1rem;font-size:.84rem;color:var(--text-dim);line-height:1.65;">
+      <b style="color:var(--amber)">Altman Z-Score:</b> ${re.altman_comment}
+    </div>
+  `;
+
+  // Global context
+  if (re.global_comment) {
+    document.getElementById("globalComment").innerHTML = `
+      <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:4px;padding:.85rem 1rem;font-size:.84rem;color:var(--text-dim);line-height:1.65;">
+        <b style="color:#6366f1">Dataset Context:</b> ${re.global_comment}
+      </div>
+    `;
+  }
+}
+
+// ── Counterfactuals panel ─────────────────────────────────────────────────────
+function renderCounterfactuals(d) {
+  const cfs = d.counterfactuals;
+  if (!cfs || !cfs.length) {
+    document.getElementById("counterfactualCards").innerHTML = "";
+    document.getElementById("cfNoData").style.display = "block";
+    return;
+  }
+  document.getElementById("cfNoData").style.display = "none";
+
+  document.getElementById("counterfactualCards").innerHTML = cfs.map(cf => {
+    const priCls = cf.priority.toLowerCase();
+    return `
+      <div class="cf-card ${priCls} fade-in">
+        <div class="cf-header">
+          <span class="cf-label">${cf.label}</span>
+          <span class="cf-priority ${priCls}">${cf.priority}</span>
+          <span class="cf-improvement">↓ −${cf.score_improvement} pts</span>
+        </div>
+        <div class="cf-sub-change">
+          <span class="cf-sub-item">Current sub-score: <b style="color:var(--red)">${cf.current_sub_score}/10</b></span>
+          <span class="cf-sub-item">→ Target: <b style="color:var(--green)">${cf.target_sub_score}/10</b></span>
+        </div>
+        <div class="cf-values">
+          <span class="cf-from">Current: ${cf.current_value}</span>
+          <span class="cf-arrow">→</span>
+          <span class="cf-to">${cf.target_label}</span>
+        </div>
+        <div class="cf-action">${cf.action}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function showTab(id) {
+  const panelIds = ["contributions","waterfall","narratives","counterfactuals","shap","lime","dice"];
+  document.querySelectorAll(".xai-tab").forEach((t,i) => {
+    t.classList.toggle("active", panelIds[i] === id);
+  });
+  document.querySelectorAll(".xai-panel").forEach(p => {
+    p.classList.toggle("active", p.id === "panel-" + id);
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHAP / LIME / DiCE rendering for XAI page
+// ═══════════════════════════════════════════════════════════════════════════
+let shapChartXai = null, limeChartXai = null;
+
+function renderXaiShap(shap) {
+  const el = document.getElementById("shapNarrativeXai");
+  if (el) el.innerHTML = `<b style="color:#a78bfa">Kernel SHAP</b> — 
+    base value: <b>${shap.base_value}</b> | prediction: <b>${shap.prediction}</b> | 
+    Δ: <b style="color:${shap.diff>0?'var(--red)':'var(--green)'}">${shap.diff>0?'+':''}${shap.diff}</b><br>
+    <span style="margin-top:.4rem;display:block">${shap.narrative}</span>`;
+
+  const vals = shap.values;
+  const ctx  = document.getElementById("shapChartXai").getContext("2d");
+  if (shapChartXai) shapChartXai.destroy();
+  shapChartXai = new Chart(ctx, {
+    type:"bar", data:{
+      labels:vals.map(v=>v.label),
+      datasets:[{ label:"SHAP Value", data:vals.map(v=>v.shap_value),
+        backgroundColor:vals.map(v=>v.shap_value>0?"#ef444455":"#22c55e55"),
+        borderColor:vals.map(v=>v.shap_value>0?"#ef4444":"#22c55e"), borderWidth:1.5, borderRadius:3 }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, indexAxis:"y",
+      plugins:{ legend:{display:false},
+        tooltip:{callbacks:{label:ctx=>{const v=vals[ctx.dataIndex];return[` SHAP: ${ctx.parsed.x>0?"+":""}${ctx.parsed.x.toFixed(3)}`,` Value: ${v.value}`]}}}
+      },
+      scales:{
+        x:{grid:{color:"#1a2035"},ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9}},title:{display:true,text:"SHAP Attribution",color:"#4a5568"}},
+        y:{grid:{color:"#1a2035"},ticks:{color:"#e2e8f0",font:{family:"IBM Plex Mono",size:9}}}
+      }, animation:{duration:700}
+    }
+  });
+
+  const tbl = document.getElementById("shapTableXai");
+  if (tbl) tbl.innerHTML = vals.map(v => {
+    const col=v.shap_value>0?"#ef4444":v.shap_value<0?"#22c55e":"#8892a4";
+    const sign=v.shap_value>0?"+":"";
+    const pct=Math.min(Math.abs(v.shap_value)/Math.max(...vals.map(x=>Math.abs(x.shap_value)))*100,100);
+    return `<div style="display:flex;align-items:center;gap:.7rem;padding:.3rem 0;border-bottom:1px solid var(--border)">
+      <span style="font-weight:600;font-size:.82rem;flex:0 0 150px">${v.label}</span>
+      <div style="flex:1;height:5px;background:var(--border);border-radius:3px">
+        <div style="height:100%;width:${pct}%;background:${col}88;border-radius:3px"></div>
+      </div>
+      <span style="font-family:var(--mono);font-size:.78rem;color:${col};width:65px;text-align:right">${sign}${v.shap_value.toFixed(3)}</span>
+      <span style="font-family:var(--mono);font-size:.72rem;color:var(--text-mute);width:60px">${v.value}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderXaiLime(lime) {
+  const el = document.getElementById("limeNarrativeXai");
+  if (el) el.innerHTML = `<b style="color:#22d3ee">LIME</b> — 
+    R²: <b>${lime.r2}</b> | samples: <b>${lime.n_samples}</b> | intercept: <b>${lime.intercept}</b><br>
+    <span style="margin-top:.4rem;display:block">${lime.narrative}</span>`;
+
+  const ws=lime.weights;
+  const ctx=document.getElementById("limeChartXai").getContext("2d");
+  if (limeChartXai) limeChartXai.destroy();
+  limeChartXai = new Chart(ctx, {
+    type:"bar", data:{
+      labels:ws.map(v=>v.label),
+      datasets:[{ label:"LIME Weight", data:ws.map(v=>v.lime_weight),
+        backgroundColor:ws.map(v=>v.lime_weight>0?"#ef444455":"#22c55e55"),
+        borderColor:ws.map(v=>v.lime_weight>0?"#ef4444":"#22c55e"), borderWidth:1.5, borderRadius:3 }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, indexAxis:"y",
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{grid:{color:"#1a2035"},ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9}},title:{display:true,text:"LIME Local Weight",color:"#4a5568"}},
+        y:{grid:{color:"#1a2035"},ticks:{color:"#e2e8f0",font:{family:"IBM Plex Mono",size:9}}}
+      }, animation:{duration:700}
+    }
+  });
+
+  const tbl=document.getElementById("limeTableXai");
+  if (tbl) tbl.innerHTML = ws.map(v=>{
+    const col=v.lime_weight>0?"#ef4444":v.lime_weight<0?"#22c55e":"#8892a4";
+    const sign=v.lime_weight>0?"+":"";
+    const pct=Math.min(v.abs_weight/Math.max(...ws.map(x=>x.abs_weight))*100,100);
+    return `<div style="display:flex;align-items:center;gap:.7rem;padding:.3rem 0;border-bottom:1px solid var(--border)">
+      <span style="font-weight:600;font-size:.82rem;flex:0 0 150px">${v.label}</span>
+      <div style="flex:1;height:5px;background:var(--border);border-radius:3px">
+        <div style="height:100%;width:${pct}%;background:${col}88;border-radius:3px"></div>
+      </div>
+      <span style="font-family:var(--mono);font-size:.78rem;color:${col};width:65px;text-align:right">${sign}${v.lime_weight.toFixed(3)}</span>
+      <span style="font-family:var(--mono);font-size:.72rem;color:var(--text-mute);width:60px">${v.value}</span>
+    </div>`;
+  }).join("");
+}
+
+function renderXaiDice(dice) {
+  const el=document.getElementById("diceNarrativeXai");
+  if (el) el.innerHTML = `<b style="color:#f59e0b">DiCE</b> — 
+    current: <b>${dice.current_score}</b> → target ≤ <b>${dice.target_score}</b> 
+    (${dice.current_category} → ${dice.target_category||"Lower Risk"})<br>
+    <span style="margin-top:.4rem;display:block">${dice.narrative}</span>`;
+
+  const cards=document.getElementById("diceCardsXai");
+  const nodata=document.getElementById("diceNoData");
+  if (!cards) return;
+
+  if (!dice.counterfactuals||dice.counterfactuals.length===0) {
+    cards.innerHTML=""; if(nodata)nodata.style.display="block";
+    return;
+  }
+  if(nodata)nodata.style.display="none";
+
+  cards.innerHTML = dice.counterfactuals.map((cf,i)=>`
+    <div style="background:var(--bg-card2);border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:6px;padding:.9rem 1.1rem;margin-bottom:.7rem">
+      <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:.6rem;flex-wrap:wrap">
+        <span style="font-family:var(--mono);font-size:.7rem;color:#f59e0b">PATH ${i+1}</span>
+        <span style="font-weight:700">Score: ${cf.new_score} (−${cf.score_reduction} pts)</span>
+        <span style="font-family:var(--mono);font-size:.72rem;color:var(--green)">→ ${cf.target_category}</span>
+        <span style="font-family:var(--mono);font-size:.7rem;color:var(--text-mute);margin-left:auto">proximity: ${cf.proximity.toFixed(3)} | changes: ${cf.n_changed}</span>
+      </div>
+      ${cf.changes.map(ch=>`
+        <div style="display:flex;align-items:center;gap:.7rem;font-size:.82rem;padding:.2rem 0;border-bottom:1px solid var(--border)">
+          <span style="font-weight:600;flex:0 0 130px">${ch.label}</span>
+          <span style="font-family:var(--mono);font-size:.78rem;color:var(--text-mute)">${ch.from}</span>
+          <span>→</span>
+          <span style="font-family:var(--mono);font-size:.78rem;color:${ch.delta>0?'#22c55e':'#f59e0b'}">${ch.to.toFixed(4)}</span>
+          <span style="font-family:var(--mono);font-size:.72rem;color:${ch.pct>0?'var(--green)':'var(--amber)'}">${ch.pct>0?'+':''}${ch.pct.toFixed(1)}%</span>
+        </div>
+        <div style="font-size:.78rem;color:var(--text-dim);padding:.1rem 0 .2rem 130px">${ch.action}</div>
+      `).join("")}
+    </div>
+  `).join("");
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadGlobalImportance();
+
+// Auto-load company from URL param
+const urlParams = new URLSearchParams(window.location.search);
+const preload   = urlParams.get("company");
+if (preload) {
+  compInput.value = preload;
+  loadCompanyXAI();
+}
+</script>
+</body>
+</html>

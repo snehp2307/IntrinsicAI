@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% block title %}Subscription — FinSight AI{% endblock %}
+{% block body %}
+<div class="page-wrapper">
+<div class="container-xl py-4">
+
+  <div class="page-header mb-4">
+    <h2 class="page-title"><i class="fas fa-crown me-3 text-warning"></i>Subscription & Billing</h2>
+    <p class="page-sub">Manage your plan. All plans renew monthly and you can cancel any time.</p>
+  </div>
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="alert alert-{{ 'success' if cat == 'success' else 'warning' if cat == 'upgrade' else cat }} alert-dismissible fade show mb-3">
+      {{ msg }} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if not stripe_enabled %}
+  <div class="alert alert-info mb-4">
+    <i class="fas fa-info-circle me-2"></i>
+    <strong>Demo Mode:</strong> Stripe is not configured. Set <code>STRIPE_SECRET_KEY</code> and
+    <code>STRIPE_WEBHOOK_SECRET</code> env vars to enable real payments.
+    Clicking "Select" will instantly simulate an upgrade.
+  </div>
+  {% endif %}
+
+  <!-- Current plan banner -->
+  {% if sub %}
+  <div class="current-plan-banner mb-4">
+    <div>
+      <div class="cpb-label">Current Plan</div>
+      <div class="cpb-name">{{ sub.plan|title }}
+        {% if sub.plan != 'free' %}<span class="badge bg-warning text-dark ms-2">Monthly</span>{% endif %}
+      </div>
+      <div class="cpb-detail">
+        {% set used = sub.predictions_used %}
+        {% set lim  = sub.predictions_limit %}
+        {{ used }} / {{ 'Unlimited' if lim >= 999999 else lim }} predictions used this month
+        {% if sub.current_period_end %}
+          · {% if sub.status == 'active' %}Renews{% else %}Ends{% endif %} {{ sub.current_period_end[:10] }}
+        {% endif %}
+      </div>
+    </div>
+    <span class="status-pill {{ 'pill-active' if sub.status == 'active' else 'pill-inactive' if sub.status == 'cancelled' else 'pill-warn' }}">
+      {{ sub.status|title }}
+    </span>
+  </div>
+  {% endif %}
+
+  <!-- Pricing cards -->
+  <div class="row g-4 mb-5">
+    {% set plans = [
+      ("free","Free","0","Free forever",[
+        "10 predictions / month","Random Forest AI","Altman Z-Score","Feature Importance XAI",
+      ], False),
+      ("starter","Starter","9.99","Per month",[
+        "50 predictions / month","SHAP Explanations","Altman + Ohlson + DCF","PDF Export",
+        "Data contribution for retraining",
+      ], False),
+      ("professional","Professional","29.99","Per month",[
+        "Unlimited predictions","SHAP + LIME + DiCE XAI","All 6 industry valuation models",
+        "DuPont + EV/EBITDA analysis","Model retraining with your data","Priority support",
+      ], True),
+      ("enterprise","Enterprise","99.99","Per month",[
+        "Everything in Professional","+ Beneish M-Score","+ Gordon Growth Model",
+        "+ Merton Distance-to-Default","REST API access","SLA guarantee · Custom model tuning",
+      ], False),
+    ] %}
+
+    {% for pid, pname, price, period, feats, popular in plans %}
+    {% set is_current = sub and sub.plan == pid %}
+    <div class="col-md-6 col-lg-3">
+      <div class="price-card {{ 'price-popular' if popular else '' }} {{ 'price-current' if is_current else '' }}">
+        {% if popular %}<div class="popular-badge">Most Popular</div>{% endif %}
+        <div class="price-name">{{ pname }}</div>
+        <div class="price-val">
+          {% if price == "0" %}
+            <span class="pv-free">Free</span>
+          {% else %}
+            <span class="pv-currency">$</span>{{ price }}<span class="pv-per">/mo</span>
+          {% endif %}
+        </div>
+        <div class="price-period text-muted small mb-3">{{ period }}</div>
+        <ul class="price-features">
+          {% for f in feats %}<li><i class="fas fa-check text-success me-2"></i>{{ f }}</li>{% endfor %}
+        </ul>
+
+        {% if is_current %}
+          <div class="btn-price-current">✓ Current Plan</div>
+        {% elif pid == 'free' %}
+          <form method="POST" action="{{ url_for('subscribe', plan=pid) }}">
+            <button type="submit" class="btn-price">Downgrade to Free</button>
+          </form>
+        {% else %}
+          <form method="POST" action="{{ url_for('subscribe', plan=pid) }}">
+            <button type="submit" class="btn-price {{ 'btn-price-primary' if popular else '' }}">
+              {% if stripe_enabled %}
+                <i class="fab fa-stripe me-1"></i>
+              {% endif %}
+              {% if sub and sub.plan != 'free' %}Upgrade{% else %}Get Started{% endif %}
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Stripe integration note -->
+  {% if stripe_enabled %}
+  <div class="alert alert-success mb-4">
+    <i class="fab fa-stripe me-2"></i>
+    <strong>Stripe Active:</strong> Payments are processed securely via Stripe.
+    Your card is billed monthly. Cancellation stops future renewals.
+    Webhook endpoint: <code>{{ request.host_url }}stripe/webhook</code>
+  </div>
+  {% endif %}
+
+  <!-- Feature comparison table -->
+  <h5 class="fw-bold mb-3">Full Feature Comparison</h5>
+  <div class="table-responsive mb-5">
+    <table class="table table-bordered align-middle text-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>Feature</th>
+          <th class="text-center">Free</th>
+          <th class="text-center">Starter</th>
+          <th class="text-center">Professional</th>
+          <th class="text-center">Enterprise</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Monthly Predictions</td>
+          <td class="text-center">10</td><td class="text-center">50</td>
+          <td class="text-center">Unlimited</td><td class="text-center">Unlimited</td></tr>
+        <tr><td>Feature Importance XAI</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>SHAP Explanations</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-success">✓</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>LIME Explanations</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-danger">—</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>DiCE Counterfactuals</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-danger">—</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>Altman Z-Score</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>Ohlson O-Score + DCF</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-success">✓</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>DuPont + EV/EBITDA + Liquidity</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-danger">—</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>Beneish + Gordon + Merton</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-danger">—</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>Contribute Data / Model Retraining</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-success">✓</td>
+          <td class="text-center text-success">✓</td><td class="text-center text-success">✓</td></tr>
+        <tr><td>REST API Access</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-danger">—</td>
+          <td class="text-center text-danger">—</td><td class="text-center text-success">✓</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Billing History -->
+  {% if billing %}
+  <h5 class="fw-bold mb-3">Billing History</h5>
+  <div class="panel mb-4">
+    <div class="panel-body p-0">
+      <table class="table mb-0">
+        <thead class="table-light"><tr>
+          <th>Date</th><th>Event</th><th>Plan</th><th class="text-end">Amount</th>
+        </tr></thead>
+        <tbody>
+          {% for b in billing %}
+          <tr>
+            <td class="text-muted small">{{ b.created_at[:10] }}</td>
+            <td>{{ b.event_type|replace('_',' ')|title }}</td>
+            <td>{% if b.plan %}<span class="badge bg-secondary">{{ b.plan|title }}</span>{% endif %}</td>
+            <td class="text-end fw-bold">
+              {% if b.amount_cents > 0 %}${{ "%.2f"|format(b.amount_cents) }}{% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Cancel -->
+  {% if sub and sub.status == 'active' and sub.plan != 'free' %}
+  <div class="text-center mt-3">
+    <form method="POST" action="{{ url_for('cancel_subscription') }}"
+          onsubmit="return confirm('Cancel? You keep access until the end of your billing period.')">
+      <button type="submit" class="btn btn-outline-danger btn-sm">
+        <i class="fas fa-times me-2"></i>Cancel Subscription
+      </button>
+    </form>
+  </div>
+  {% endif %}
+
+</div>
+</div>
+<style>
+.price-card{border:1.5px solid #E5E7EB;border-radius:14px;padding:1.5rem;height:100%;
+  position:relative;background:#fff;transition:box-shadow .2s;}
+.price-card:hover{box-shadow:0 8px 24px rgba(0,0,0,.1);}
+.price-popular{border-color:#6366F1;box-shadow:0 4px 20px rgba(99,102,241,.2);}
+.price-current{border-color:#10B981;background:#F0FDF4;}
+.popular-badge{position:absolute;top:-12px;left:50%;transform:translateX(-50%);
+  background:#6366F1;color:#fff;font-size:.72rem;padding:.25rem .9rem;
+  border-radius:50px;font-weight:700;white-space:nowrap;}
+.price-name{font-size:1.1rem;font-weight:700;color:#1F2937;margin-bottom:.5rem;}
+.price-val{font-size:2rem;font-weight:800;color:#1F2937;}
+.pv-currency{font-size:1rem;vertical-align:top;margin-top:.4rem;display:inline-block;}
+.pv-per{font-size:.85rem;color:#6B7280;font-weight:400;}
+.pv-free{font-size:1.8rem;color:#10B981;}
+.price-features{list-style:none;padding:0;margin:.75rem 0 1rem;font-size:.82rem;
+  color:#374151;line-height:2.1;}
+.btn-price{display:block;width:100%;padding:.6rem;border-radius:8px;
+  border:1.5px solid #D1D5DB;background:#fff;color:#374151;font-weight:600;
+  cursor:pointer;transition:all .2s;font-size:.85rem;}
+.btn-price:hover{border-color:#6366F1;color:#6366F1;}
+.btn-price-primary{background:#6366F1;color:#fff;border-color:#6366F1;}
+.btn-price-primary:hover{background:#4F46E5;color:#fff;}
+.btn-price-current{text-align:center;padding:.6rem;font-size:.85rem;
+  color:#10B981;font-weight:700;}
+.current-plan-banner{display:flex;justify-content:space-between;align-items:center;
+  background:#F0F9FF;border:1px solid #BAE6FD;border-radius:12px;padding:1.25rem 1.5rem;}
+.cpb-label{font-size:.8rem;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;}
+.cpb-name{font-size:1.2rem;font-weight:700;color:#1F2937;}
+.cpb-detail{font-size:.82rem;color:#6B7280;margin-top:.25rem;}
+.status-pill{padding:.35rem .9rem;border-radius:50px;font-size:.78rem;font-weight:600;}
+.pill-active{background:#D1FAE5;color:#065F46;}
+.pill-inactive{background:#FEE2E2;color:#991B1B;}
+.pill-warn{background:#FEF3C7;color:#92400E;}
+.text-sm{font-size:.82rem;}
+</style>
+{% endblock %}

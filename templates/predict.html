@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FinRisk Intelligence — Bankruptcy Predictor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Predict-page specific styles ── */
+.predict-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  padding: 2rem 2.5rem;
+  align-items: start;
+}
+
+.form-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 72px;
+}
+
+.result-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Form sections */
+.form-section {
+  margin-bottom: 1.5rem;
+}
+
+.form-section-title {
+  font-family: var(--mono);
+  font-size: .7rem;
+  color: var(--amber);
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  margin-bottom: .9rem;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .7rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+
+.form-group label {
+  font-size: .72rem;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+.form-group input {
+  background: var(--bg-card2);
+  border: 1px solid var(--border-lite);
+  border-radius: 4px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: .82rem;
+  padding: .45rem .7rem;
+  outline: none;
+  transition: border-color .2s, background .2s;
+  width: 100%;
+}
+
+.form-group input:focus {
+  border-color: var(--amber);
+  background: #1a2035;
+}
+
+.form-group input.error {
+  border-color: var(--red);
+}
+
+.form-group .hint {
+  font-size: .65rem;
+  color: var(--text-mute);
+  font-family: var(--mono);
+}
+
+/* Company name full width */
+.form-group.full {
+  grid-column: 1 / -1;
+}
+
+/* Submit button */
+.btn-predict {
+  width: 100%;
+  background: linear-gradient(135deg, #f59e0b22, #f59e0b11);
+  border: 1px solid var(--amber);
+  color: var(--amber);
+  font-family: var(--mono);
+  font-size: .9rem;
+  font-weight: 600;
+  padding: .85rem;
+  border-radius: 5px;
+  cursor: pointer;
+  letter-spacing: .06em;
+  transition: all .2s;
+  margin-top: .5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6rem;
+}
+
+.btn-predict:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f59e0b44, #f59e0b22);
+  box-shadow: 0 0 20px #f59e0b22;
+}
+
+.btn-predict:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.btn-clear {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border-lite);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: .78rem;
+  padding: .55rem;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: .5rem;
+  transition: all .2s;
+}
+
+.btn-clear:hover { border-color: var(--text-dim); color: var(--text); }
+
+/* ── Result card ── */
+.result-placeholder {
+  background: var(--bg-card);
+  border: 1px dashed var(--border-lite);
+  border-radius: 8px;
+  padding: 3rem;
+  text-align: center;
+  color: var(--text-mute);
+  font-family: var(--mono);
+  font-size: .82rem;
+}
+
+.result-placeholder .icon { font-size: 2.5rem; margin-bottom: 1rem; opacity: .3; }
+
+.verdict-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.8rem;
+  box-shadow: var(--shadow);
+  animation: fadeIn .4s ease both;
+}
+
+.verdict-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  gap: 1rem;
+}
+
+.verdict-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.verdict-score-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.verdict-score {
+  font-family: var(--mono);
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.verdict-score-lbl {
+  font-size: .65rem;
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+/* Gauge bar */
+.gauge-wrap {
+  margin: 1rem 0;
+}
+
+.gauge-track {
+  height: 10px;
+  background: var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: .4rem;
+}
+
+.gauge-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 1s cubic-bezier(.4,0,.2,1);
+}
+
+.gauge-labels {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: .65rem;
+  color: var(--text-mute);
+}
+
+/* Explanation */
+.explain-box {
+  background: var(--bg-card2);
+  border: 1px solid var(--border-lite);
+  border-left: 3px solid var(--amber);
+  border-radius: 4px;
+  padding: .9rem 1.1rem;
+  font-size: .85rem;
+  line-height: 1.75;
+  margin: 1rem 0;
+}
+
+/* Ratios computed grid */
+.ratios-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .5rem;
+  margin-top: .5rem;
+}
+
+.ratio-chip {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .5rem .7rem;
+  text-align: center;
+}
+
+.ratio-chip-lbl {
+  font-size: .62rem;
+  color: var(--text-mute);
+  font-family: var(--mono);
+  margin-bottom: .2rem;
+  line-height: 1.3;
+}
+
+.ratio-chip-val {
+  font-family: var(--mono);
+  font-size: .88rem;
+  font-weight: 600;
+}
+
+/* Altman strip */
+.altman-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: var(--bg-card2);
+  border: 1px solid var(--border-lite);
+  border-radius: 4px;
+  padding: .75rem 1rem;
+  margin-top: .75rem;
+}
+
+.altman-bar-label { font-family: var(--mono); font-size: .72rem; color: var(--text-dim); flex: 1; }
+.altman-bar-val   { font-family: var(--mono); font-size: 1.2rem; font-weight: 700; }
+.altman-bar-zone  {
+  font-family: var(--mono);
+  font-size: .7rem;
+  padding: .2rem .6rem;
+  border-radius: 3px;
+  font-weight: 600;
+}
+
+.zone-distress { background:#ef444422; color:var(--red);   border:1px solid #ef444444; }
+.zone-grey     { background:#f59e0b22; color:var(--amber); border:1px solid #f59e0b44; }
+.zone-safe     { background:#22c55e22; color:var(--green); border:1px solid #22c55e44; }
+
+/* Similar companies */
+.similar-list { display: flex; flex-direction: column; gap: .4rem; }
+
+.similar-row {
+  display: flex;
+  align-items: center;
+  gap: .8rem;
+  padding: .5rem .75rem;
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: .82rem;
+  transition: background .15s;
+}
+
+.similar-row:hover { background: var(--bg-hover); }
+.similar-name { flex: 1; font-weight: 500; }
+.similar-name a { color: var(--text); }
+.similar-name a:hover { color: var(--amber); }
+.similar-cluster { font-family: var(--mono); font-size: .7rem; color: var(--text-mute); }
+
+/* Loading overlay */
+.predict-loading {
+  display: none;
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: .82rem;
+}
+
+.predict-loading .spin {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border-lite);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  margin: 0 auto .75rem;
+}
+
+/* Sample buttons */
+.sample-btns {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.2rem;
+}
+
+.sample-btn {
+  font-family: var(--mono);
+  font-size: .7rem;
+  padding: .25rem .7rem;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid;
+  background: transparent;
+  transition: all .15s;
+}
+
+.sample-btn.s-high  { color:var(--red);   border-color:#ef444444; }
+.sample-btn.s-high:hover  { background:#ef444422; }
+.sample-btn.s-med   { color:var(--amber); border-color:#f59e0b44; }
+.sample-btn.s-med:hover   { background:#f59e0b22; }
+.sample-btn.s-low   { color:var(--green); border-color:#22c55e44; }
+.sample-btn.s-low:hover   { background:#22c55e22; }
+
+@media (max-width: 900px) {
+  .predict-layout { grid-template-columns: 1fr; }
+  .form-card { position: static; }
+  .ratios-grid { grid-template-columns: repeat(2,1fr); }
+}
+
+/* ── XAI styles ── */
+.xai-card { border-left: 3px solid #6366f1; }
+
+.xai-conf-badge {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: .68rem;
+  padding: .2rem .6rem;
+  border-radius: 3px;
+  background: #6366f122;
+  color: #6366f1;
+  border: 1px solid #6366f144;
+}
+
+/* Narrative */
+.xai-narrative-box {
+  background: var(--bg-card2);
+  border: 1px solid #6366f133;
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  margin-bottom: .75rem;
+}
+
+.xai-summary {
+  font-size: .9rem;
+  line-height: 1.75;
+  margin-bottom: .75rem;
+  color: var(--text);
+}
+
+.xai-section-lbl {
+  font-family: var(--mono);
+  font-size: .65rem;
+  color: #6366f1;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: .4rem;
+  margin-top: .6rem;
+}
+
+.xai-sentence {
+  font-size: .82rem;
+  line-height: 1.65;
+  color: var(--text-dim);
+  padding: .25rem 0;
+  padding-left: .8rem;
+  border-left: 2px solid #6366f144;
+  margin-bottom: .3rem;
+}
+
+.xai-sentence.driver { border-left-color: var(--red);   color: #fca5a5; }
+.xai-sentence.protect{ border-left-color: var(--green); color: #86efac; }
+.xai-sentence.action { border-left-color: var(--amber); color: #fcd34d; }
+
+/* Attribution list */
+.attribution-list {
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  margin-top: .75rem;
+}
+
+.attr-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 60px;
+  align-items: center;
+  gap: .6rem;
+  padding: .3rem 0;
+}
+
+.attr-label { font-size: .78rem; color: var(--text-dim); font-family: var(--mono); }
+.attr-bar-wrap { position: relative; height: 16px; background: var(--border); border-radius: 3px; overflow: visible; }
+
+.attr-bar-pos {
+  position: absolute;
+  left: 50%;
+  height: 100%;
+  background: #ef444488;
+  border: 1px solid var(--red);
+  border-radius: 0 3px 3px 0;
+  transition: width .8s ease;
+}
+.attr-bar-neg {
+  position: absolute;
+  right: 50%;
+  height: 100%;
+  background: #22c55e88;
+  border: 1px solid var(--green);
+  border-radius: 3px 0 0 3px;
+  transition: width .8s ease;
+}
+.attr-center-line {
+  position: absolute;
+  left: 50%;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: var(--border-lite);
+}
+.attr-val {
+  font-family: var(--mono);
+  font-size: .75rem;
+  text-align: right;
+}
+
+/* Counterfactuals */
+.cf-card {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: .9rem 1.1rem;
+  margin-bottom: .6rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.cf-card::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--amber);
+}
+
+.cf-header { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
+.cf-label  { font-weight: 600; font-size: .88rem; }
+.cf-transition { font-family: var(--mono); font-size: .68rem; color: var(--amber); padding: .15rem .5rem; background: var(--amber-dim); border-radius: 3px; }
+.cf-drop   { font-family: var(--mono); font-size: .75rem; color: var(--green); margin-left: auto; }
+
+.cf-change-row { display: flex; align-items: center; gap: 1rem; font-family: var(--mono); font-size: .78rem; margin-bottom: .4rem; }
+.cf-from { color: var(--text-mute); }
+.cf-arrow { color: var(--amber); }
+.cf-to   { color: var(--text); font-weight: 600; }
+.cf-pct  { color: var(--amber); }
+
+.cf-action { font-size: .78rem; color: var(--text-dim); line-height: 1.6; }
+
+.cf-feasibility-wrap { display: flex; align-items: center; gap: .5rem; margin-top: .4rem; }
+.cf-feas-label { font-family: var(--mono); font-size: .65rem; color: var(--text-mute); }
+.cf-feas-bar   { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.cf-feas-fill  { height: 100%; background: var(--amber); transition: width .8s ease; }
+.cf-feas-val   { font-family: var(--mono); font-size: .65rem; color: var(--amber); }
+
+/* Sensitivity grid */
+.sensitivity-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: .6rem;
+  margin-top: .75rem;
+}
+
+.sens-card {
+  background: var(--bg-card2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .7rem .9rem;
+}
+
+.sens-label { font-size: .72rem; color: var(--text-dim); font-family: var(--mono); margin-bottom: .4rem; }
+.sens-steps { display: flex; flex-direction: column; gap: .2rem; }
+.sens-step  { display: flex; justify-content: space-between; font-family: var(--mono); font-size: .72rem; }
+.sens-step-delta { color: var(--green); }
+.sens-step-val   { color: var(--text-mute); }
+
+@media (max-width: 700px) {
+  .sensitivity-grid { grid-template-columns: 1fr 1fr; }
+  .attr-row { grid-template-columns: 100px 1fr 50px; }
+}
+</style>
+</head>
+<body>
+
+<div class="noise"></div>
+
+<!-- NAV -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <a href="/" style="text-decoration:none;display:flex;align-items:center;gap:.5rem">
+      <span class="brand-icon">◈</span>
+      <span class="brand-text">FinRisk<span class="brand-accent">Intelligence</span></span>
+    </a>
+  </div>
+  <div class="nav-right">
+    <a href="/" class="nav-link">Dashboard</a>
+    <a href="/predict" class="nav-link active">Predict</a>
+    <a href="/xai" class="nav-link">XAI</a>
+    <a href="/submissions" class="nav-link">Submissions</a>
+  </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<div class="hero-strip" style="padding:2rem 3rem">
+  <div class="hero-content">
+    <p class="hero-label">Manual Analysis Tool</p>
+    <h1 class="hero-title" style="font-size:1.8rem">Bankruptcy Risk <span class="hero-accent">Predictor</span></h1>
+    <p class="hero-sub">Enter any company's financial data → get instant AI risk assessment</p>
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="predict-layout">
+
+  <!-- LEFT: INPUT FORM -->
+  <div class="form-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <h2 style="font-size:.95rem;font-weight:600">Financial Data Input</h2>
+      <span style="font-family:var(--mono);font-size:.7rem;color:var(--text-mute)">All values in ₹ Lakhs or any consistent unit</span>
+    </div>
+
+    <!-- Sample data shortcuts -->
+    <div class="form-section-title" style="margin-bottom:.6rem">⚡ Load Sample Data</div>
+    <div class="sample-btns">
+      <button class="sample-btn s-high" onclick="loadSample('high')">🔴 High Risk Company</button>
+      <button class="sample-btn s-med"  onclick="loadSample('medium')">🟡 Medium Risk Company</button>
+      <button class="sample-btn s-low"  onclick="loadSample('low')">🟢 Low Risk Company</button>
+    </div>
+
+    <form id="predictForm">
+
+      <!-- Company Info -->
+      <div class="form-section">
+        <div class="form-section-title">◈ Company Information</div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Company Name</label>
+            <input type="text" id="company_name" placeholder="e.g. ACME Corp" value="My Company"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Balance Sheet -->
+      <div class="form-section">
+        <div class="form-section-title">▣ Balance Sheet</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Current Assets</label>
+            <input type="number" id="current_assets" placeholder="e.g. 5000" step="any"/>
+            <span class="hint">Cash, receivables, inventory</span>
+          </div>
+          <div class="form-group">
+            <label>Current Liabilities</label>
+            <input type="number" id="current_liabilities" placeholder="e.g. 3000" step="any"/>
+            <span class="hint">Due within 1 year</span>
+          </div>
+          <div class="form-group">
+            <label>Inventory</label>
+            <input type="number" id="inventory" placeholder="e.g. 800" step="any"/>
+            <span class="hint">Raw materials, WIP, finished goods</span>
+          </div>
+          <div class="form-group">
+            <label>Total Assets</label>
+            <input type="number" id="total_assets" placeholder="e.g. 15000" step="any"/>
+            <span class="hint">All assets</span>
+          </div>
+          <div class="form-group">
+            <label>Total Liabilities</label>
+            <input type="number" id="total_liabilities" placeholder="e.g. 8000" step="any"/>
+            <span class="hint">All obligations</span>
+          </div>
+          <div class="form-group">
+            <label>Total Debt</label>
+            <input type="number" id="total_debt" placeholder="e.g. 6000" step="any"/>
+            <span class="hint">Long + short term borrowings</span>
+          </div>
+          <div class="form-group">
+            <label>Total Equity</label>
+            <input type="number" id="total_equity" placeholder="e.g. 7000" step="any"/>
+            <span class="hint">Shareholders' equity</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Income Statement -->
+      <div class="form-section">
+        <div class="form-section-title">◉ Income Statement</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Revenue</label>
+            <input type="number" id="revenue" placeholder="e.g. 12000" step="any"/>
+            <span class="hint">Total sales / turnover</span>
+          </div>
+          <div class="form-group">
+            <label>Net Profit</label>
+            <input type="number" id="net_profit" placeholder="e.g. 800" step="any"/>
+            <span class="hint">Can be negative</span>
+          </div>
+          <div class="form-group">
+            <label>EBIT</label>
+            <input type="number" id="ebit" placeholder="e.g. 1200" step="any"/>
+            <span class="hint">Earnings before interest & tax</span>
+          </div>
+          <div class="form-group">
+            <label>Interest Expense</label>
+            <input type="number" id="interest_expense" placeholder="e.g. 300" step="any"/>
+            <span class="hint">Finance charges paid</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cash Flow -->
+      <div class="form-section">
+        <div class="form-section-title">↗ Cash Flow</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Operating Cash Flow</label>
+            <input type="number" id="operating_cash_flow" placeholder="e.g. 900" step="any"/>
+            <span class="hint">Cash from core operations</span>
+          </div>
+          <div class="form-group">
+            <label>Free Cash Flow</label>
+            <input type="number" id="free_cash_flow" placeholder="e.g. 500" step="any"/>
+            <span class="hint">Operating CF minus capex</span>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-predict" id="submitBtn">
+        <span id="submitIcon">◈</span>
+        <span id="submitText">Analyze Bankruptcy Risk</span>
+      </button>
+      <button type="button" class="btn-clear" onclick="clearForm()">Clear All Fields</button>
+
+    </form>
+  </div>
+
+  <!-- RIGHT: RESULTS -->
+  <div class="result-panel" id="resultPanel">
+
+    <!-- Placeholder -->
+    <div class="result-placeholder" id="resultPlaceholder">
+      <div class="icon">◈</div>
+      <p>Enter financial data on the left<br/>and click <b>Analyze</b> to get your prediction</p>
+      <p style="margin-top:.75rem;font-size:.72rem">Or load a sample company to see how it works</p>
+    </div>
+
+    <!-- Loading -->
+    <div class="predict-loading" id="predictLoading">
+      <div class="spin"></div>
+      Analysing financial data…
+    </div>
+
+    <!-- Results (hidden until prediction) -->
+    <div id="resultContent" style="display:none">
+
+      <!-- Verdict -->
+      <div class="verdict-card" id="verdictCard">
+        <div class="verdict-header">
+          <div>
+            <div style="font-family:var(--mono);font-size:.7rem;color:var(--text-mute);margin-bottom:.3rem">COMPANY</div>
+            <div class="verdict-name" id="vName">—</div>
+            <div style="margin-top:.5rem" id="vBadge"></div>
+          </div>
+          <div class="verdict-score-wrap">
+            <div class="verdict-score" id="vScore">—</div>
+            <div class="verdict-score-lbl">Risk Score / 100</div>
+          </div>
+        </div>
+
+        <!-- Gauge -->
+        <div class="gauge-wrap">
+          <div class="gauge-track">
+            <div class="gauge-fill" id="gaugeFill" style="width:0%"></div>
+          </div>
+          <div class="gauge-labels">
+            <span style="color:var(--green)">0 — Low Risk</span>
+            <span style="color:var(--amber)">33 — Medium</span>
+            <span style="color:var(--red)">60 — High Risk — 100</span>
+          </div>
+        </div>
+
+        <!-- Explanation -->
+        <div class="explain-box" id="vExplain">—</div>
+
+        <!-- Altman Z -->
+        <div id="vAltman"></div>
+      </div>
+
+      <!-- Computed Ratios -->
+      <div class="card" id="ratiosCard">
+        <div class="card-header">
+          <span class="card-icon">▣</span>
+          <h2 class="card-title">Computed Financial Ratios</h2>
+          <span class="card-subtitle">Derived from your inputs</span>
+        </div>
+        <div class="ratios-grid" id="ratiosGrid"></div>
+      </div>
+
+      <!-- Risk Drivers -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">▲</span>
+          <h2 class="card-title">Top Risk Drivers</h2>
+          <span class="card-subtitle">Feature importance — distress sub-score (0–10)</span>
+        </div>
+        <div id="factorBars" class="factor-bars"></div>
+      </div>
+
+      <!-- Radar Chart -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">⬡</span>
+          <h2 class="card-title">Risk Factor Radar</h2>
+          <span class="card-subtitle">0 = healthy · 10 = distressed</span>
+        </div>
+        <div class="chart-wrap" style="height:300px">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════
+           XAI SECTION
+           ═══════════════════════════════════════════════ -->
+
+      <!-- XAI: Confidence & Narrative -->
+      <div class="card xai-card" id="xaiNarrativeCard">
+        <div class="card-header">
+          <span class="card-icon" style="color:#6366f1">◈</span>
+          <h2 class="card-title">XAI — AI Narrative Explanation</h2>
+          <span id="xaiConfidenceBadge" class="xai-conf-badge"></span>
+        </div>
+        <div id="xaiNarrative"></div>
+      </div>
+
+      <!-- XAI: Waterfall Attribution Chart -->
+      <div class="card xai-card">
+        <div class="card-header">
+          <span class="card-icon" style="color:#6366f1">↕</span>
+          <h2 class="card-title">XAI — Feature Attribution (SHAP-style)</h2>
+          <span class="card-subtitle">Contribution of each ratio vs. population baseline</span>
+        </div>
+        <div style="font-family:var(--mono);font-size:.7rem;color:var(--text-mute);margin-bottom:.75rem">
+          🔴 Positive bar = ratio is INCREASING risk above baseline &nbsp;|&nbsp; 🟢 Negative bar = ratio is REDUCING risk
+        </div>
+        <div class="chart-wrap" style="height:300px">
+          <canvas id="waterfallChart"></canvas>
+        </div>
+        <div id="attributionList" class="attribution-list"></div>
+      </div>
+
+      <!-- XAI: Counterfactual Explanations -->
+      <div class="card xai-card" id="counterfactualCard">
+        <div class="card-header">
+          <span class="card-icon" style="color:#6366f1">⟳</span>
+          <h2 class="card-title">XAI — Counterfactual Analysis</h2>
+          <span class="card-subtitle">Minimum changes needed to reach a lower risk category</span>
+        </div>
+        <div id="counterfactualList"></div>
+      </div>
+
+      <!-- XAI: Sensitivity / What-If -->
+      <div class="card xai-card">
+        <div class="card-header">
+          <span class="card-icon" style="color:#6366f1">⚙</span>
+          <h2 class="card-title">XAI — What-If Sensitivity Analysis</h2>
+          <span class="card-subtitle">How much does risk score drop if each ratio improves?</span>
+        </div>
+        <div class="chart-wrap" style="height:280px">
+          <canvas id="sensitivityChart"></canvas>
+        </div>
+        <div id="sensitivityGrid" class="sensitivity-grid"></div>
+      </div>
+
+      <!-- Similar Companies -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">◎</span>
+          <h2 class="card-title">Similar Companies in Dataset</h2>
+          <span class="card-subtitle">Closest risk score match from 5,000 companies</span>
+        </div>
+        <div class="similar-list" id="similarList"></div>
+      </div>
+
+      <!-- ═══ SHAP / LIME / DiCE TABS ═══ -->
+      <div class="card" id="advXaiCard">
+        <div class="card-header">
+          <span class="card-icon" style="color:#a78bfa">⬡</span>
+          <h2 class="card-title">Advanced XAI</h2>
+          <span class="card-subtitle">SHAP · LIME · DiCE</span>
+        </div>
+        <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1.2rem;flex-wrap:wrap">
+          <button class="adv-tab active" onclick="switchAdvTab('shap')" id="tab-shap" style="font-family:var(--mono);font-size:.75rem;padding:.5rem 1rem;background:transparent;border:none;border-bottom:2px solid #a78bfa;color:#a78bfa;cursor:pointer;margin-bottom:-2px">🔮 SHAP</button>
+          <button class="adv-tab" onclick="switchAdvTab('lime')" id="tab-lime" style="font-family:var(--mono);font-size:.75rem;padding:.5rem 1rem;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-dim);cursor:pointer;margin-bottom:-2px">🔍 LIME</button>
+          <button class="adv-tab" onclick="switchAdvTab('dice')" id="tab-dice" style="font-family:var(--mono);font-size:.75rem;padding:.5rem 1rem;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-dim);cursor:pointer;margin-bottom:-2px">🎲 DiCE</button>
+          <button class="adv-tab" onclick="switchAdvTab('blend')" id="tab-blend" style="font-family:var(--mono);font-size:.75rem;padding:.5rem 1rem;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--text-dim);cursor:pointer;margin-bottom:-2px">📊 Score Blend</button>
+        </div>
+
+        <!-- SHAP panel -->
+        <div id="advpanel-shap" style="display:block">
+          <div id="shapNarrative" style="background:var(--bg-card2);border:1px solid var(--border-lite);border-left:3px solid #a78bfa;border-radius:4px;padding:.9rem 1.1rem;font-size:.85rem;line-height:1.75;margin-bottom:1rem"></div>
+          <div style="font-family:var(--mono);font-size:.7rem;color:var(--text-mute);margin-bottom:.5rem">
+            SHAP value = how much each feature pushes the score above/below the population baseline.
+            🔴 Positive → raises risk · 🟢 Negative → lowers risk.
+          </div>
+          <div style="height:300px;position:relative"><canvas id="shapChart"></canvas></div>
+          <div id="shapTable" style="margin-top:.8rem;display:flex;flex-direction:column;gap:.3rem"></div>
+        </div>
+
+        <!-- LIME panel -->
+        <div id="advpanel-lime" style="display:none">
+          <div id="limeNarrative" style="background:var(--bg-card2);border:1px solid var(--border-lite);border-left:3px solid #22d3ee;border-radius:4px;padding:.9rem 1.1rem;font-size:.85rem;line-height:1.75;margin-bottom:1rem"></div>
+          <div style="font-family:var(--mono);font-size:.7rem;color:var(--text-mute);margin-bottom:.5rem">
+            LIME fits a local linear surrogate near this company's data point.
+            Coefficients show local sensitivity — how much each feature matters in this neighbourhood.
+          </div>
+          <div style="height:300px;position:relative"><canvas id="limeChart"></canvas></div>
+          <div id="limeTable" style="margin-top:.8rem;display:flex;flex-direction:column;gap:.3rem"></div>
+        </div>
+
+        <!-- DiCE panel -->
+        <div id="advpanel-dice" style="display:none">
+          <div id="diceNarrative" style="background:var(--bg-card2);border:1px solid var(--border-lite);border-left:3px solid #f59e0b;border-radius:4px;padding:.9rem 1.1rem;font-size:.85rem;line-height:1.75;margin-bottom:1rem"></div>
+          <div style="font-family:var(--mono);font-size:.7rem;color:var(--text-mute);margin-bottom:.75rem">
+            Each card below shows one diverse counterfactual path to a lower risk category.
+            Changes are minimal and mutually diverse — different strategies to the same goal.
+          </div>
+          <div id="diceCards"></div>
+        </div>
+
+        <!-- Score blend panel -->
+        <div id="advpanel-blend" style="display:none">
+          <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:1.2rem;margin-bottom:1rem">
+            <div style="font-family:var(--mono);font-size:.72rem;color:var(--text-mute);margin-bottom:.8rem;text-transform:uppercase;letter-spacing:.08em">Final Score Composition</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;text-align:center">
+              <div><div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:var(--amber)" id="blendRuleScore">—</div><div style="font-size:.72rem;color:var(--text-mute)">Rule-Based (60%)</div></div>
+              <div><div style="font-family:var(--mono);font-size:2rem;font-weight:700;color:#a78bfa" id="blendMlScore">—</div><div style="font-size:.72rem;color:var(--text-mute)">ML Model (40%)</div></div>
+              <div><div style="font-family:var(--mono);font-size:2rem;font-weight:700" id="blendFinalScore">—</div><div style="font-size:.72rem;color:var(--text-mute)">Final Blended</div></div>
+            </div>
+          </div>
+          <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:1rem;font-size:.84rem;color:var(--text-dim);line-height:1.7;margin-bottom:1rem">
+            <b style="color:var(--text)">How blending works:</b> Rule-based scorer uses 9 financial ratios with domain-expert thresholds.
+            The ML model is a GradientBoostingRegressor trained on 5,000 base companies
+            <em>plus your submissions (weighted 3×)</em>. As you submit more companies, the ML model adapts.
+            <br/><br/><a href="/submissions" style="color:#a78bfa">→ View all submissions &amp; model status</a>
+          </div>
+          <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:1rem">
+            <div style="font-family:var(--mono);font-size:.72rem;color:var(--text-mute);margin-bottom:.6rem;text-transform:uppercase">SHAP + LIME Consensus</div>
+            <div id="xaiConsensus" style="font-size:.85rem;line-height:1.65;color:var(--text-dim)">—</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  <span>FinRisk Intelligence © 2024</span>
+  <span class="footer-sep">|</span>
+  <span>Rule Engine · GBM Adaptive Model · Kernel SHAP · LIME · DiCE</span>
+</footer>
+
+<script>
+// ── Sample data presets ──────────────────────────────────────────────────────
+const SAMPLES = {
+  high: {
+    company_name: "DistressedCo Ltd",
+    current_assets: 1200, current_liabilities: 3500, inventory: 900,
+    total_assets: 8000,   total_liabilities: 7200, total_debt: 6500,
+    total_equity: 800,    revenue: 4000,  net_profit: -800,
+    ebit: -400,  interest_expense: 600,
+    operating_cash_flow: -300, free_cash_flow: -500,
+  },
+  medium: {
+    company_name: "MidTier Industries",
+    current_assets: 3800, current_liabilities: 3200, inventory: 600,
+    total_assets: 14000,  total_liabilities: 7500, total_debt: 5500,
+    total_equity: 6500,   revenue: 9000,  net_profit: 300,
+    ebit: 700,  interest_expense: 400,
+    operating_cash_flow: 500, free_cash_flow: 200,
+  },
+  low: {
+    company_name: "StableGrowth Corp",
+    current_assets: 7500, current_liabilities: 2500, inventory: 800,
+    total_assets: 22000,  total_liabilities: 5000, total_debt: 3000,
+    total_equity: 17000,  revenue: 18000, net_profit: 2800,
+    ebit: 3500, interest_expense: 250,
+    operating_cash_flow: 3200, free_cash_flow: 2500,
+  },
+};
+
+function loadSample(type) {
+  const s = SAMPLES[type];
+  Object.keys(s).forEach(k => {
+    const el = document.getElementById(k);
+    if (el) el.value = s[k];
+  });
+}
+
+function clearForm() {
+  const fields = ["company_name","current_assets","current_liabilities","inventory",
+    "total_assets","total_liabilities","total_debt","total_equity",
+    "revenue","net_profit","ebit","interest_expense",
+    "operating_cash_flow","free_cash_flow"];
+  fields.forEach(f => {
+    const el = document.getElementById(f);
+    if (el) el.value = f === "company_name" ? "My Company" : "";
+  });
+  document.getElementById("resultPlaceholder").style.display = "block";
+  document.getElementById("resultContent").style.display = "none";
+}
+
+// ── Form submit ───────────────────────────────────────────────────────────────
+document.getElementById("predictForm").addEventListener("submit", async e => {
+  e.preventDefault();
+
+  const payload = {
+    company_name:       document.getElementById("company_name").value || "My Company",
+    current_assets:     document.getElementById("current_assets").value,
+    current_liabilities:document.getElementById("current_liabilities").value,
+    inventory:          document.getElementById("inventory").value,
+    total_assets:       document.getElementById("total_assets").value,
+    total_liabilities:  document.getElementById("total_liabilities").value,
+    total_debt:         document.getElementById("total_debt").value,
+    total_equity:       document.getElementById("total_equity").value,
+    revenue:            document.getElementById("revenue").value,
+    net_profit:         document.getElementById("net_profit").value,
+    ebit:               document.getElementById("ebit").value,
+    interest_expense:   document.getElementById("interest_expense").value,
+    operating_cash_flow:document.getElementById("operating_cash_flow").value,
+    free_cash_flow:     document.getElementById("free_cash_flow").value,
+  };
+
+  // UI: loading state
+  const btn = document.getElementById("submitBtn");
+  btn.disabled = true;
+  document.getElementById("submitText").textContent = "Analysing…";
+  document.getElementById("submitIcon").textContent = "⟳";
+  document.getElementById("resultPlaceholder").style.display = "none";
+  document.getElementById("predictLoading").style.display = "block";
+  document.getElementById("resultContent").style.display = "none";
+
+  try {
+    const res  = await fetch("/api/predict", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      alert("Error: " + data.error);
+      return;
+    }
+
+    renderResult(data);
+
+  } catch (err) {
+    alert("Network error: " + err.message);
+  } finally {
+    btn.disabled = false;
+    document.getElementById("submitText").textContent = "Analyze Bankruptcy Risk";
+    document.getElementById("submitIcon").textContent = "◈";
+    document.getElementById("predictLoading").style.display = "none";
+  }
+});
+
+// ── Render result ─────────────────────────────────────────────────────────────
+let radarChart = null;
+
+function renderResult(d) {
+  document.getElementById("resultContent").style.display = "block";
+
+  const score = d.risk_score;
+  const cat   = d.risk_category;
+  const catCls = cat === "High Risk" ? "badge-high" : cat === "Medium Risk" ? "badge-med" : "badge-low";
+  const scoreColor = score >= 60 ? "#ef4444" : score >= 33 ? "#f59e0b" : "#22c55e";
+
+  // Verdict
+  document.getElementById("vName").textContent = d.company_name;
+  document.getElementById("vScore").textContent = score.toFixed(1);
+  document.getElementById("vScore").style.color = scoreColor;
+  document.getElementById("vBadge").innerHTML =
+    `<span class="risk-badge ${catCls} big-badge">${cat}</span>`;
+  document.getElementById("vExplain").textContent = d.explanation;
+
+  // Gauge
+  setTimeout(() => {
+    const gf = document.getElementById("gaugeFill");
+    gf.style.width = score + "%";
+    gf.style.background = `linear-gradient(90deg, #22c55e, ${score >= 60 ? "#ef4444" : score >= 33 ? "#f59e0b" : "#22c55e"})`;
+  }, 50);
+
+  // Altman Z
+  const az = d.altman_z;
+  if (az !== null) {
+    const zoneClass = az < 1.1 ? "zone-distress" : az < 2.6 ? "zone-grey" : "zone-safe";
+    const zoneLabel = az < 1.1 ? "Distress Zone" : az < 2.6 ? "Grey Zone" : "Safe Zone";
+    document.getElementById("vAltman").innerHTML = `
+      <div class="altman-bar">
+        <span class="altman-bar-label">Altman Z-Score</span>
+        <span class="altman-bar-val" style="color:${az<1.1?'var(--red)':az<2.6?'var(--amber)':'var(--green)'}">
+          ${az.toFixed(3)}
+        </span>
+        <span class="altman-bar-zone ${zoneClass}">${zoneLabel}</span>
+      </div>
+    `;
+  }
+
+  // Computed ratios
+  const r = d.ratios;
+  const ratioItems = [
+    ["Current Ratio",      r.current_ratio,      r.current_ratio < 1 ? "high-txt" : "safe-txt"],
+    ["Quick Ratio",        r.quick_ratio,        r.quick_ratio < 0.7 ? "high-txt" : "safe-txt"],
+    ["Debt / Equity",      r.debt_to_equity,     r.debt_to_equity > 3 ? "high-txt" : r.debt_to_equity > 2 ? "warn-txt" : "safe-txt"],
+    ["Debt / Assets",      r.debt_to_assets,     r.debt_to_assets > 0.6 ? "high-txt" : "safe-txt"],
+    ["Profit Margin %",    r.profit_margin + "%", r.profit_margin < 0 ? "high-txt" : "safe-txt"],
+    ["Return on Assets %", r.return_on_assets + "%", r.return_on_assets < 0 ? "high-txt" : "safe-txt"],
+    ["Interest Coverage",  r.interest_coverage,  r.interest_coverage < 1.5 ? "high-txt" : "safe-txt"],
+    ["OCF / Liabilities",  r.ocf_to_liabilities, r.ocf_to_liabilities < 0 ? "high-txt" : "safe-txt"],
+  ];
+
+  document.getElementById("ratiosGrid").innerHTML = ratioItems.map(([label, val, cls]) => `
+    <div class="ratio-chip">
+      <div class="ratio-chip-lbl">${label}</div>
+      <div class="ratio-chip-val ${cls}">${typeof val === 'number' ? val.toFixed(2) : val}</div>
+    </div>
+  `).join("");
+
+  // Factor bars
+  document.getElementById("factorBars").innerHTML = d.top_factors.map(f => {
+    const pct = (f.sub_score / 10 * 100).toFixed(0);
+    const col = f.sub_score >= 6.5 ? "#ef4444" : f.sub_score >= 3.5 ? "#f59e0b" : "#22c55e";
+    return `
+      <div class="factor-row fade-in">
+        <div class="factor-meta">
+          <span class="factor-label">${f.label}</span>
+          <span class="factor-val mono">${typeof f.value === 'number' ? f.value.toFixed(3) : f.value}</span>
+          <span class="factor-score" style="color:${col}">${f.sub_score.toFixed(1)}/10</span>
+        </div>
+        <div class="factor-bar-wrap">
+          <div class="factor-bar-fill" style="width:${pct}%;background:${col}33;border-right:2px solid ${col}"></div>
+        </div>
+        <div class="factor-desc">${f.description}</div>
+      </div>
+    `;
+  }).join("");
+
+  // Radar
+  if (radarChart) radarChart.destroy();
+  const ctx = document.getElementById("radarChart").getContext("2d");
+  radarChart = new Chart(ctx, {
+    type: "radar",
+    data: {
+      labels: d.radar_labels,
+      datasets: [{
+        label: "Distress Level",
+        data: d.radar_values,
+        backgroundColor: scoreColor + "33",
+        borderColor: scoreColor,
+        borderWidth: 2,
+        pointBackgroundColor: scoreColor,
+        pointRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        r: {
+          min: 0, max: 10,
+          grid: { color:"#1e2433" },
+          angleLines: { color:"#1e2433" },
+          ticks: { color:"#8892a4", font:{family:"IBM Plex Mono",size:9}, backdropColor:"transparent" },
+          pointLabels: { color:"#8892a4", font:{family:"IBM Plex Mono",size:9} },
+        }
+      },
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks:{ label: ctx => `${ctx.raw}/10` }}
+      },
+      animation: { duration:800 }
+    }
+  });
+
+  // Similar companies
+  document.getElementById("similarList").innerHTML = d.similar_companies.map(c => `
+    <div class="similar-row">
+      <span class="similar-name"><a href="/company/${encodeURIComponent(c.company_name)}">${c.company_name}</a></span>
+      <span class="similar-cluster">${c.cluster_label}</span>
+      <span class="score-pill ${c.risk_score >= 60 ? 'score-high' : c.risk_score >= 33 ? 'score-med' : 'score-low'}">${c.risk_score}</span>
+      <span class="risk-badge ${c.risk_category==='High Risk'?'badge-high':c.risk_category==='Medium Risk'?'badge-med':'badge-low'}">${c.risk_category}</span>
+    </div>
+  `).join("");
+
+  // XAI full suite
+  if (d.xai) renderXAI(d.xai, d.risk_category);
+
+  // Scroll to results on mobile
+  if (window.innerWidth < 900) {
+    document.getElementById("resultContent").scrollIntoView({behavior:"smooth"});
+  }
+
+  // SHAP / LIME / DiCE
+  if (d.shap) renderShap(d.shap);
+  if (d.lime) renderLime(d.lime);
+  if (d.dice) renderDice(d.dice);
+  if (d.xai_consensus) { const el = document.getElementById("consensusBox"); if (el) el.textContent = d.xai_consensus; }
+  if (d.rule_score !== undefined && d.ml_score !== undefined) renderBlend(d);
+}
+
+// ── XAI rendering ─────────────────────────────────────────────────────────
+let waterfallChart = null, sensitivityChart = null;
+
+function renderXAI(xai, riskCategory) {
+  renderXAINarrative(xai.narrative, xai.confidence_score);
+  renderWaterfall(xai.waterfall_data);
+  renderAttributionList(xai.attributions);
+  renderCounterfactuals(xai.counterfactuals, riskCategory);
+  renderSensitivity(xai.sensitivity);
+}
+
+function renderXAINarrative(n, confidence) {
+  // Confidence badge
+  document.getElementById("xaiConfidenceBadge").textContent =
+    `Confidence: ${confidence.toFixed(0)}%`;
+
+  let html = `<div class="xai-narrative-box">`;
+  html += `<div class="xai-summary">${n.summary}</div>`;
+
+  if (n.driver_sentences.length) {
+    html += `<div class="xai-section-lbl">⚠ Risk Drivers</div>`;
+    n.driver_sentences.forEach(s => {
+      html += `<div class="xai-sentence driver">${s}</div>`;
+    });
+  }
+
+  if (n.protector_sentences.length) {
+    html += `<div class="xai-section-lbl">✓ Protective Factors</div>`;
+    n.protector_sentences.forEach(s => {
+      html += `<div class="xai-sentence protect">${s}</div>`;
+    });
+  }
+
+  if (n.action_sentences.length) {
+    html += `<div class="xai-section-lbl">→ Recommended Actions</div>`;
+    n.action_sentences.forEach(s => {
+      html += `<div class="xai-sentence action">${s}</div>`;
+    });
+  }
+
+  html += `<div style="margin-top:.75rem;padding-top:.6rem;border-top:1px solid var(--border)">
+    <span style="font-family:var(--mono);font-size:.68rem;color:var(--text-mute)">
+      ${n.confidence}
+    </span>
+  </div>`;
+  html += `</div>`;
+  document.getElementById("xaiNarrative").innerHTML = html;
+}
+
+function renderWaterfall(wf) {
+  const attrs = wf.attributions;
+  const labels = wf.labels;
+  const colors = attrs.map(v => v >= 0 ? "#ef444499" : "#22c55e99");
+  const borders = attrs.map(v => v >= 0 ? "#ef4444" : "#22c55e");
+
+  const ctx = document.getElementById("waterfallChart").getContext("2d");
+  if (waterfallChart) waterfallChart.destroy();
+  waterfallChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Attribution (risk score points)",
+        data: attrs,
+        backgroundColor: colors,
+        borderColor: borders,
+        borderWidth: 1.5,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          label: ctx => {
+            const v = ctx.parsed.x;
+            return `  ${v > 0 ? '+' : ''}${v.toFixed(2)} pts  ${v > 0 ? '↑ increases risk' : '↓ reduces risk'}`;
+          }
+        }},
+        annotation: { annotations: { line0: {
+          type: 'line', xMin: 0, xMax: 0,
+          borderColor: '#ffffff44', borderWidth: 1,
+        }}}
+      },
+      scales: {
+        x: {
+          grid: { color: "#1a2035" },
+          ticks: { color: "#8892a4", font: { family: "IBM Plex Mono", size: 10 } },
+          title: { display: true, text: "Contribution to Risk Score", color: "#4a5568" }
+        },
+        y: {
+          grid: { color: "#1a2035" },
+          ticks: { color: "#8892a4", font: { family: "IBM Plex Mono", size: 10 } }
+        }
+      },
+      animation: { duration: 700 }
+    }
+  });
+}
+
+function renderAttributionList(attributions) {
+  const maxAbs = Math.max(...attributions.map(a => Math.abs(a.attribution)), 1);
+  document.getElementById("attributionList").innerHTML = attributions.map(a => {
+    const pct = Math.abs(a.attribution) / maxAbs * 45;  // max 45% of half
+    const isPos = a.attribution >= 0;
+    const valColor = isPos ? "var(--red)" : "var(--green)";
+    return `
+      <div class="attr-row fade-in">
+        <span class="attr-label">${a.label}</span>
+        <div class="attr-bar-wrap">
+          <div class="attr-center-line"></div>
+          ${isPos
+            ? `<div class="attr-bar-pos" style="width:${pct}%"></div>`
+            : `<div class="attr-bar-neg" style="width:${pct}%"></div>`
+          }
+        </div>
+        <span class="attr-val" style="color:${valColor}">${a.attribution > 0 ? '+' : ''}${a.attribution.toFixed(1)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderCounterfactuals(cfs, riskCategory) {
+  const card = document.getElementById("counterfactualCard");
+  if (!cfs || cfs.length === 0) {
+    if (riskCategory === "Low Risk") {
+      document.getElementById("counterfactualList").innerHTML =
+        `<div style="font-family:var(--mono);font-size:.8rem;color:var(--green);padding:.75rem">
+          ✓ Company is already in Low Risk category — no counterfactual changes needed.
+        </div>`;
+    } else {
+      document.getElementById("counterfactualList").innerHTML =
+        `<div style="font-family:var(--mono);font-size:.8rem;color:var(--text-mute);padding:.75rem">
+          No single-ratio change sufficient to change risk category.
+        </div>`;
+    }
+    return;
+  }
+
+  document.getElementById("counterfactualList").innerHTML = cfs.map((cf, i) => `
+    <div class="cf-card fade-in" style="animation-delay:${i*80}ms">
+      <div class="cf-header">
+        <span class="cf-label">${cf.label}</span>
+        <span class="cf-transition">${cf.transition.replace('->', '→')}</span>
+        <span class="cf-drop">−${cf.score_drop.toFixed(1)} pts</span>
+      </div>
+      <div class="cf-change-row">
+        <span class="cf-from">Current: ${cf.current_value.toFixed(3)}</span>
+        <span class="cf-arrow">→</span>
+        <span class="cf-to">Required: ${cf.required_value.toFixed(3)}</span>
+        <span class="cf-pct">(${cf.pct_change > 0 ? '+' : ''}${cf.pct_change.toFixed(1)}%)</span>
+      </div>
+      <div class="cf-action">${cf.action}</div>
+      <div class="cf-feasibility-wrap">
+        <span class="cf-feas-label">Feasibility</span>
+        <div class="cf-feas-bar">
+          <div class="cf-feas-fill" style="width:${(cf.feasibility * 100).toFixed(0)}%"></div>
+        </div>
+        <span class="cf-feas-val">${(cf.feasibility * 100).toFixed(0)}%</span>
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderSensitivity(sensitivity) {
+  if (!sensitivity || !sensitivity.length) return;
+
+  const labels = sensitivity.map(s => s.label);
+  const maxImpacts = sensitivity.map(s => s.max_impact);
+
+  const ctx = document.getElementById("sensitivityChart").getContext("2d");
+  if (sensitivityChart) sensitivityChart.destroy();
+  sensitivityChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: "Max Risk Score Reduction",
+        data: maxImpacts,
+        backgroundColor: "#6366f166",
+        borderColor: "#6366f1",
+        borderWidth: 1.5,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: {
+          label: ctx => `  Max reduction: −${ctx.parsed.y.toFixed(2)} pts`
+        }}
+      },
+      scales: {
+        x: { grid: { color:"#1a2035" }, ticks: { color:"#8892a4", font:{family:"IBM Plex Mono",size:9} } },
+        y: {
+          grid: { color:"#1a2035" },
+          ticks: { color:"#8892a4", font:{family:"IBM Plex Mono",size:9} },
+          title: { display: true, text:"Score Reduction (pts)", color:"#4a5568" }
+        }
+      },
+      animation: { duration: 700 }
+    }
+  });
+
+  document.getElementById("sensitivityGrid").innerHTML = sensitivity.map(s => `
+    <div class="sens-card fade-in">
+      <div class="sens-label">${s.label}</div>
+      <div class="sens-steps">
+        ${s.steps.map(step => `
+          <div class="sens-step">
+            <span class="sens-step-val">→ ${step.new_value.toFixed(2)}</span>
+            <span class="sens-step-delta">−${step.score_change.toFixed(1)}pts</span>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SHAP / LIME / DiCE rendering
+// ═══════════════════════════════════════════════════════════════════════════
+
+let shapChart = null, limeChart = null;
+
+
+
+function switchAdvTab(name) {
+  ["shap","lime","dice","blend"].forEach(t => {
+    const panel = document.getElementById("advpanel-" + t);
+    const tab   = document.getElementById("tab-" + t);
+    if (!panel || !tab) return;
+    const active = t === name;
+    panel.style.display = active ? "block" : "none";
+    tab.style.borderBottomColor = active
+      ? (t==="shap"?"#a78bfa":t==="lime"?"#22d3ee":t==="dice"?"#f59e0b":"#6366f1")
+      : "transparent";
+    tab.style.color = active ? tab.style.borderBottomColor : "var(--text-dim)";
+  });
+}
+
+// ── SHAP ──────────────────────────────────────────────────────────────────
+function renderShap(shap) {
+  const el = document.getElementById("shapNarrative");
+  if (el) el.innerHTML = `
+    <b style="color:#a78bfa">Kernel SHAP</b> — base value: <b>${shap.base_value}</b> | 
+    prediction: <b>${shap.prediction}</b> | 
+    Δ from baseline: <b style="color:${shap.diff>0?'var(--red)':'var(--green)'}">${shap.diff>0?'+':''}${shap.diff}</b><br>
+    <span style="margin-top:.4rem;display:block">${shap.narrative}</span>
+  `;
+
+  const vals = shap.values;
+  const ctx  = document.getElementById("shapChart").getContext("2d");
+  if (shapChart) shapChart.destroy();
+  shapChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: vals.map(v => v.label),
+      datasets: [{
+        label: "SHAP Value",
+        data: vals.map(v => v.shap_value),
+        backgroundColor: vals.map(v => v.shap_value > 0 ? "#ef444455" : "#22c55e55"),
+        borderColor:     vals.map(v => v.shap_value > 0 ? "#ef4444"   : "#22c55e"),
+        borderWidth: 1.5, borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => {
+          const v = vals[ctx.dataIndex];
+          return [
+            ` SHAP: ${ctx.parsed.x > 0 ? "+" : ""}${ctx.parsed.x.toFixed(3)}`,
+            ` Value: ${v.value}`,
+            ` Effect: ${v.effect}`,
+          ];
+        }}}
+      },
+      scales: {
+        x: { grid:{color:"#1a2035"}, ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9}},
+             title:{display:true,text:"SHAP Attribution (score pts)",color:"#4a5568"} },
+        y: { grid:{color:"#1a2035"}, ticks:{color:"#e2e8f0",font:{family:"IBM Plex Mono",size:9}} }
+      },
+      animation: { duration: 700 }
+    }
+  });
+
+  const tbl = document.getElementById("shapTable");
+  if (tbl) tbl.innerHTML = vals.map(v => {
+    const col = v.shap_value > 0 ? "#ef4444" : v.shap_value < 0 ? "#22c55e" : "#8892a4";
+    const sign = v.shap_value > 0 ? "+" : "";
+    const pct = Math.min(Math.abs(v.shap_value)/Math.max(...vals.map(x=>Math.abs(x.shap_value)))*100, 100);
+    return `
+      <div style="display:flex;align-items:center;gap:.7rem;padding:.3rem 0;border-bottom:1px solid var(--border)">
+        <span style="font-weight:600;font-size:.82rem;flex:0 0 140px">${v.label}</span>
+        <div style="flex:1;height:5px;background:var(--border);border-radius:3px">
+          <div style="height:100%;width:${pct}%;background:${col}88;border-radius:3px"></div>
+        </div>
+        <span style="font-family:var(--mono);font-size:.78rem;color:${col};width:60px;text-align:right">
+          ${sign}${v.shap_value.toFixed(3)}
+        </span>
+        <span style="font-family:var(--mono);font-size:.72rem;color:var(--text-mute);width:55px">${v.value}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+// ── LIME ──────────────────────────────────────────────────────────────────
+function renderLime(lime) {
+  const el = document.getElementById("limeNarrative");
+  if (el) el.innerHTML = `
+    <b style="color:#22d3ee">LIME</b> — local surrogate R²: <b>${lime.r2}</b> | 
+    samples: <b>${lime.n_samples}</b> | intercept: <b>${lime.intercept}</b><br>
+    <span style="margin-top:.4rem;display:block">${lime.narrative}</span>
+  `;
+
+  const ws  = lime.weights;
+  const ctx = document.getElementById("limeChart").getContext("2d");
+  if (limeChart) limeChart.destroy();
+  limeChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: ws.map(v => v.label),
+      datasets: [{
+        label: "LIME Weight",
+        data: ws.map(v => v.lime_weight),
+        backgroundColor: ws.map(v => v.lime_weight > 0 ? "#ef444455" : "#22c55e55"),
+        borderColor:     ws.map(v => v.lime_weight > 0 ? "#ef4444"   : "#22c55e"),
+        borderWidth: 1.5, borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => {
+          const v = ws[ctx.dataIndex];
+          return [` LIME weight: ${ctx.parsed.x.toFixed(3)}`, ` Value: ${v.value}`, ` Effect: ${v.effect}`];
+        }}}
+      },
+      scales: {
+        x: { grid:{color:"#1a2035"}, ticks:{color:"#8892a4",font:{family:"IBM Plex Mono",size:9}},
+             title:{display:true,text:"LIME Local Weight",color:"#4a5568"} },
+        y: { grid:{color:"#1a2035"}, ticks:{color:"#e2e8f0",font:{family:"IBM Plex Mono",size:9}} }
+      },
+      animation: { duration: 700 }
+    }
+  });
+
+  const tbl = document.getElementById("limeTable");
+  if (tbl) tbl.innerHTML = ws.map(v => {
+    const col  = v.lime_weight > 0 ? "#ef4444" : v.lime_weight < 0 ? "#22c55e" : "#8892a4";
+    const sign = v.lime_weight > 0 ? "+" : "";
+    const pct  = Math.min(v.abs_weight / Math.max(...ws.map(x=>x.abs_weight)) * 100, 100);
+    return `
+      <div style="display:flex;align-items:center;gap:.7rem;padding:.3rem 0;border-bottom:1px solid var(--border)">
+        <span style="font-weight:600;font-size:.82rem;flex:0 0 140px">${v.label}</span>
+        <div style="flex:1;height:5px;background:var(--border);border-radius:3px">
+          <div style="height:100%;width:${pct}%;background:${col}88;border-radius:3px"></div>
+        </div>
+        <span style="font-family:var(--mono);font-size:.78rem;color:${col};width:60px;text-align:right">${sign}${v.lime_weight.toFixed(3)}</span>
+        <span style="font-family:var(--mono);font-size:.72rem;color:var(--text-mute);width:55px">${v.value}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+// ── DiCE ──────────────────────────────────────────────────────────────────
+function renderDice(dice) {
+  const el = document.getElementById("diceNarrative");
+  if (el) el.innerHTML = `
+    <b style="color:#f59e0b">DiCE</b> — diverse counterfactuals |
+    current: <b>${dice.current_score}</b> → target: <b>${dice.target_score}</b> 
+    (${dice.current_category} → ${dice.target_category || "Lower Risk"})<br>
+    <span style="margin-top:.4rem;display:block">${dice.narrative}</span>
+  `;
+
+  const cards = document.getElementById("diceCards");
+  if (!cards) return;
+
+  if (!dice.counterfactuals || dice.counterfactuals.length === 0) {
+    cards.innerHTML = `<div style="text-align:center;padding:1.5rem;font-family:var(--mono);font-size:.82rem;color:var(--text-mute)">
+      ${dice.message || "No counterfactuals found — try a higher-risk company."}
+    </div>`;
+    return;
+  }
+
+  cards.innerHTML = dice.counterfactuals.map((cf, i) => `
+    <div style="background:var(--bg-card2);border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:6px;padding:.9rem 1.1rem;margin-bottom:.7rem">
+      <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:.6rem">
+        <span style="font-family:var(--mono);font-size:.7rem;color:#f59e0b">PATH ${i+1}</span>
+        <span style="font-weight:700">Score: ${cf.new_score} (−${cf.score_reduction} pts)</span>
+        <span style="font-family:var(--mono);font-size:.72rem;color:var(--green)">→ ${cf.target_category}</span>
+        <span style="font-family:var(--mono);font-size:.7rem;color:var(--text-mute);margin-left:auto">prox: ${cf.proximity.toFixed(3)} | Δ features: ${cf.n_changed}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.3rem">
+        ${cf.changes.map(ch => `
+          <div style="display:flex;align-items:center;gap:.7rem;font-size:.82rem;padding:.25rem 0;border-bottom:1px solid var(--border)">
+            <span style="font-weight:600;flex:0 0 130px">${ch.label}</span>
+            <span style="font-family:var(--mono);font-size:.78rem;color:var(--text-mute)">${ch.from}</span>
+            <span style="color:var(--text-mute)">→</span>
+            <span style="font-family:var(--mono);font-size:.78rem;color:${ch.delta > 0 ? '#22c55e' : '#f59e0b'}">${ch.to.toFixed(4)}</span>
+            <span style="font-family:var(--mono);font-size:.72rem;color:${ch.pct > 0 ? 'var(--green)' : 'var(--amber)'};">${ch.pct > 0 ? '+' : ''}${ch.pct.toFixed(1)}%</span>
+          </div>
+          <div style="font-size:.78rem;color:var(--text-dim);padding:.15rem 0 .25rem 0">${ch.action}</div>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+// ── Blend panel ────────────────────────────────────────────────────────────
+function renderBlend(d) {
+  const el = document.getElementById("advpanel-blend");
+  if (!el) return;
+  const ruleScore = d.rule_score;
+  const mlScore   = d.ml_score;
+  const finalScore= d.risk_score;
+  el.innerHTML = `
+    <div style="font-size:.85rem;line-height:1.75;margin-bottom:1rem">
+      The final risk score is a <b>weighted blend</b> of the rule-based model (60%) and
+      the adaptive ML model (40%) trained on the full dataset plus all user submissions.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.2rem">
+      <div style="text-align:center;background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:1rem">
+        <div style="font-family:var(--mono);font-size:1.8rem;font-weight:700;color:var(--amber)">${ruleScore}</div>
+        <div style="font-size:.75rem;color:var(--text-mute);margin-top:.3rem">Rule-Based (60%)</div>
+      </div>
+      <div style="text-align:center;background:var(--bg-card2);border:1px solid var(--border);border-radius:6px;padding:1rem">
+        <div style="font-family:var(--mono);font-size:1.8rem;font-weight:700;color:#6366f1">${mlScore !== null ? mlScore : "N/A"}</div>
+        <div style="font-size:.75rem;color:var(--text-mute);margin-top:.3rem">ML Model (40%)</div>
+      </div>
+      <div style="text-align:center;background:var(--bg-card2);border:1px solid var(--border-lite);border-radius:6px;padding:1rem;border-left:3px solid var(--amber)">
+        <div style="font-family:var(--mono);font-size:1.8rem;font-weight:700;color:${finalScore>=60?'var(--red)':finalScore>=33?'var(--amber)':'var(--green)'}">${finalScore}</div>
+        <div style="font-size:.75rem;color:var(--text-mute);margin-top:.3rem">Final Blended Score</div>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:.75rem;color:var(--text-mute);border-top:1px solid var(--border);padding-top:.8rem">
+      ℹ Your submission has been saved and the adaptive model will retrain in the background,
+      incorporating this company's data for future predictions.
+    </div>
+  `;
+}
+
+
+// ── Chart.js defaults ─────────────────────────────────────────────────────────
+Chart.defaults.color = "#8892a4";
+Chart.defaults.font.family = "IBM Plex Mono";
+Chart.defaults.plugins.tooltip.backgroundColor = "#0f1524";
+Chart.defaults.plugins.tooltip.borderColor = "#2a3550";
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+</script>
+</body>
+</html>

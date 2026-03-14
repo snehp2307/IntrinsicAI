@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Admin — Model Retrain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+</head>
+<body>
+<div class="noise"></div>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-text">FinRisk<span class="brand-accent">Intelligence</span></span>
+  </div>
+  <div class="nav-right">
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/logout" class="nav-link">Logout</a>
+  </div>
+</nav>
+
+<main style="max-width:800px;margin:2rem auto;padding:0 1.5rem;">
+  <h1 style="font-size:1.6rem;font-weight:700;margin-bottom:.3rem;">⚙ Admin — Model Retrain</h1>
+  <p style="color:#8892a4;margin-bottom:2rem;">Retrain the Random Forest on the base dataset plus user contributions.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div style="padding:.75rem 1rem;border-radius:6px;margin-bottom:1rem;
+                  background:{{ '#22c55e20' if cat=='success' else '#ef444420' }};
+                  color:{{ '#22c55e' if cat=='success' else '#ef4444' }};
+                  border:1px solid {{ '#22c55e40' if cat=='success' else '#ef444440' }};">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <h2 class="card-title" style="margin-bottom:1rem;">Platform Statistics</h2>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;">
+      <div style="background:#080e1a;border:1px solid #1a2035;border-radius:8px;padding:1.2rem;text-align:center;">
+        <div style="font-size:2rem;font-weight:700;font-family:'IBM Plex Mono',monospace;">{{ stats.total_users }}</div>
+        <div style="color:#8892a4;font-size:.875rem;margin-top:.25rem;">Registered Users</div>
+      </div>
+      <div style="background:#080e1a;border:1px solid #1a2035;border-radius:8px;padding:1.2rem;text-align:center;">
+        <div style="font-size:2rem;font-weight:700;font-family:'IBM Plex Mono',monospace;">{{ stats.total_predictions }}</div>
+        <div style="color:#8892a4;font-size:.875rem;margin-top:.25rem;">Total Predictions</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title" style="margin-bottom:.5rem;">Retrain Model</h2>
+    <p style="color:#8892a4;font-size:.9rem;margin-bottom:1.5rem;">
+      This will retrain the Random Forest classifier on the base dataset.
+      This may take 30–60 seconds. The app will continue serving the old model during retraining.
+    </p>
+    <form method="POST" action="/admin/retrain">
+      <button type="submit" style="padding:.85rem 2rem;background:#ef4444;color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:1rem;font-weight:600;cursor:pointer;">
+        🔄 Retrain Model Now
+      </button>
+    </form>
+  </div>
+</main>
+
+<footer class="footer"><span>FinRisk Intelligence © 2024</span></footer>
+</body>
+</html>

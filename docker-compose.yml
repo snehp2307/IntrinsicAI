@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  web:
+    build: .
+    container_name: finrisk_app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - SECRET_KEY=dev-secret-change-in-prod
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      # Persist DB and trained models across restarts
+      - ./instance:/app/instance
+      - ./models:/app/models
+      - ./data:/app/data
+    command: >
+      sh -c "
+        python train_model.py &&
+        python app.py
+      "
+    restart: unless-stopped

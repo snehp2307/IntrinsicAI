@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Login — FinRisk Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+<style>
+  .auth-wrap{display:flex;justify-content:center;align-items:center;min-height:90vh;padding:2rem;}
+  .auth-card{background:#0e1523;border:1px solid #1a2035;border-radius:12px;padding:2.5rem;width:100%;max-width:420px;}
+  .auth-title{font-size:1.6rem;font-weight:700;margin-bottom:.4rem;}
+  .auth-sub{color:#8892a4;margin-bottom:2rem;font-size:.9rem;}
+  .form-group{margin-bottom:1.25rem;}
+  .form-group label{display:block;margin-bottom:.45rem;font-size:.85rem;color:#8892a4;font-family:'IBM Plex Mono',monospace;}
+  .form-group input{width:100%;padding:.75rem 1rem;background:#080e1a;border:1px solid #2d3748;border-radius:6px;color:#e2e8f0;font-family:inherit;font-size:.95rem;box-sizing:border-box;}
+  .form-group input:focus{outline:none;border-color:#3b82f6;}
+  .btn-full{width:100%;padding:.85rem;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:1rem;font-weight:600;cursor:pointer;margin-top:.5rem;}
+  .btn-full:hover{background:#2563eb;}
+  .auth-footer{text-align:center;margin-top:1.5rem;color:#8892a4;font-size:.875rem;}
+  .auth-footer a{color:#3b82f6;text-decoration:none;}
+  .alert{padding:.75rem 1rem;border-radius:6px;margin-bottom:1rem;font-size:.875rem;}
+  .alert-danger{background:#ef444420;border:1px solid #ef444440;color:#ef4444;}
+  .alert-success{background:#22c55e20;border:1px solid #22c55e40;color:#22c55e;}
+  .alert-warning{background:#f59e0b20;border:1px solid #f59e0b40;color:#f59e0b;}
+  .alert-info{background:#3b82f620;border:1px solid #3b82f640;color:#3b82f6;}
+</style>
+</head>
+<body>
+<div class="noise"></div>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-text">FinRisk<span class="brand-accent">Intelligence</span></span>
+  </div>
+  <div class="nav-right"><a href="/" class="nav-link">Home</a></div>
+</nav>
+
+<div class="auth-wrap">
+  <div class="auth-card">
+    <h1 class="auth-title">Welcome Back</h1>
+    <p class="auth-sub">Sign in to your FinRisk Intelligence account</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="POST" action="/login">
+      <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="you@example.com" required autofocus/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Your password" required/>
+      </div>
+      <button type="submit" class="btn-full">Sign In →</button>
+    </form>
+
+    <div class="auth-footer">
+      New here? <a href="/register">Create an account</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

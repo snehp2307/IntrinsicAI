@@ -1,0 +1,582 @@
+{% extends "base.html" %}
+{% block title %}Analysis Report — FinSight AI{% endblock %}
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── Result page extras ─────────────────────────────────────────────── */
+.report-header{display:flex;justify-content:space-between;align-items:center;
+  background:linear-gradient(135deg,#1E2761,#283593);border-radius:12px;
+  padding:1.5rem 2rem;color:#fff;flex-wrap:wrap;gap:1rem;}
+.rh-company{font-size:1.5rem;font-weight:700;}
+.rh-date{font-size:.85rem;opacity:.7;margin-top:.3rem;}
+.risk-pill-lg{padding:.5rem 1.5rem;border-radius:50px;font-weight:700;font-size:1rem;}
+.risk-pill-lg.risk-low{background:#D1FAE5;color:#065F46;}
+.risk-pill-lg.risk-moderate{background:#FEF3C7;color:#92400E;}
+.risk-pill-lg.risk-high{background:#FEE2E2;color:#991B1B;}
+.panel{background:#fff;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;}
+.panel-head{background:#F9FAFB;padding:.85rem 1.25rem;font-weight:600;
+  font-size:.9rem;color:#374151;border-bottom:1px solid #E5E7EB;}
+.panel-body{padding:1.25rem;}
+.big-gauge{width:130px;height:130px;border-radius:50%;display:flex;
+  flex-direction:column;align-items:center;justify-content:center;
+  margin:0 auto;border:8px solid;font-weight:700;}
+.gauge-low{border-color:#10B981;color:#10B981;}
+.gauge-moderate{border-color:#F59E0B;color:#F59E0B;}
+.gauge-high{border-color:#EF4444;color:#EF4444;}
+.bg-val{font-size:1.8rem;}
+.bg-lbl{font-size:.65rem;color:#6B7280;text-align:center;line-height:1.2;}
+.prob-track{background:#F3F4F6;height:10px;border-radius:5px;overflow:hidden;}
+.prob-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,#10B981,#F59E0B,#EF4444);}
+.factor-row{display:flex;align-items:center;gap:.75rem;padding:.5rem 0;
+  border-bottom:1px solid #F3F4F6;}
+.factor-row:last-child{border:none;}
+.fr-rank{min-width:26px;height:26px;border-radius:50%;background:#E0E7FF;
+  color:#4338CA;font-size:.75rem;font-weight:700;display:flex;
+  align-items:center;justify-content:center;}
+.fr-info{flex:1;min-width:0;}
+.fr-code{font-size:.7rem;background:#F3F4F6;padding:.15rem .5rem;
+  border-radius:4px;margin-right:.4rem;font-family:monospace;}
+.fr-label{font-size:.8rem;color:#374151;}
+.fr-dir{font-size:.72rem;padding:.1rem .4rem;border-radius:4px;margin-left:.3rem;}
+.dir-risk{background:#FEE2E2;color:#991B1B;}
+.dir-safe{background:#D1FAE5;color:#065F46;}
+.fr-val{font-size:.8rem;font-weight:600;color:#1F2937;min-width:60px;text-align:right;}
+.fr-bar-col{min-width:100px;display:flex;align-items:center;gap:.4rem;}
+.fr-bar-bg{flex:1;height:8px;background:#F3F4F6;border-radius:4px;overflow:hidden;}
+.fr-bar-fill{height:100%;background:#6366F1;border-radius:4px;}
+.fr-pct{font-size:.75rem;color:#6B7280;min-width:35px;}
+.section-heading{font-size:1.1rem;font-weight:700;color:#1F2937;
+  border-left:4px solid #6366F1;padding-left:.75rem;}
+/* valuation cards */
+.vm-result-card{border-radius:10px;padding:1.25rem;border:1px solid;height:100%;}
+.vc-green{border-color:#10B981;background:#F0FDF4;}
+.vc-amber{border-color:#F59E0B;background:#FFFBEB;}
+.vc-red{border-color:#EF4444;background:#FFF1F2;}
+.vc-blue{border-color:#3B82F6;background:#EFF6FF;}
+.vc-grey{border-color:#9CA3AF;background:#F9FAFB;}
+.vmr-header{display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:.75rem;}
+.vmr-name{font-weight:700;font-size:.85rem;color:#1F2937;}
+.vmr-badge{font-size:.7rem;padding:.2rem .6rem;border-radius:50px;font-weight:600;}
+.badge-green{background:#D1FAE5;color:#065F46;}
+.badge-amber{background:#FEF3C7;color:#92400E;}
+.badge-red{background:#FEE2E2;color:#991B1B;}
+.badge-blue{background:#DBEAFE;color:#1E40AF;}
+.badge-grey{background:#F3F4F6;color:#6B7280;}
+.vmr-score{font-size:2rem;font-weight:800;margin:.25rem 0;color:#1F2937;}
+.vmr-interp{font-size:.78rem;color:#6B7280;line-height:1.4;}
+.vmc-row{display:flex;justify-content:space-between;font-size:.72rem;
+  color:#6B7280;padding:.2rem 0;border-top:1px solid rgba(0,0,0,.06);}
+/* XAI tabs */
+.xai-tabs{display:flex;gap:.5rem;margin-bottom:1.25rem;flex-wrap:wrap;}
+.xai-tab{padding:.5rem 1rem;border-radius:8px;border:1.5px solid #E5E7EB;
+  font-size:.82rem;font-weight:600;cursor:pointer;color:#6B7280;
+  background:#fff;transition:all .2s;}
+.xai-tab.active,.xai-tab:hover{background:#6366F1;color:#fff;border-color:#6366F1;}
+.xai-panel{display:none;}
+.xai-panel.active{display:block;}
+.xai-desc{font-size:.8rem;color:#6B7280;background:#F9FAFB;padding:.75rem;
+  border-radius:8px;margin-bottom:1rem;border-left:3px solid #6366F1;}
+/* SHAP / LIME rows */
+.shap-row,.lime-row{display:flex;align-items:center;gap:.75rem;
+  padding:.5rem 0;border-bottom:1px solid #F3F4F6;}
+.shap-row:last-child,.lime-row:last-child{border:none;}
+.sr-label{flex:1;font-size:.8rem;color:#374151;}
+.sr-val{min-width:65px;text-align:right;font-size:.8rem;font-weight:600;}
+.sr-bar{min-width:140px;}
+.sr-bar-track{height:10px;border-radius:5px;overflow:visible;
+  display:flex;align-items:center;justify-content:center;}
+.sr-bar-pos{height:10px;background:#EF4444;border-radius:0 4px 4px 0;}
+.sr-bar-neg{height:10px;background:#10B981;border-radius:4px 0 0 4px;}
+.sr-impact{font-size:.7rem;padding:.15rem .45rem;border-radius:50px;}
+.sr-red{background:#FEE2E2;color:#991B1B;}
+.sr-green{background:#D1FAE5;color:#065F46;}
+/* DiCE counterfactuals */
+.cf-card{border:1px solid #E5E7EB;border-radius:10px;padding:1rem;margin-bottom:1rem;}
+.cf-title{font-size:.8rem;font-weight:700;color:#4338CA;margin-bottom:.75rem;}
+.cf-change{display:flex;justify-content:space-between;align-items:center;
+  padding:.4rem 0;border-bottom:1px solid #F3F4F6;font-size:.78rem;}
+.cf-change:last-child{border:none;}
+.cf-change-dir{font-weight:600;color:#7C3AED;}
+.upgrade-lock{background:#F9FAFB;border:2px dashed #D1D5DB;border-radius:10px;
+  padding:2rem;text-align:center;color:#9CA3AF;}
+.upgrade-lock a{color:#6366F1;font-weight:600;}
+/* DuPont components */
+.dupont-row{display:flex;justify-content:space-between;align-items:center;
+  padding:.4rem 0;border-bottom:1px solid #F3F4F6;}
+.dupont-row:last-child{border:none;}
+.dp-label{font-size:.8rem;color:#374151;}
+.dp-val{font-size:.85rem;font-weight:700;}
+.dp-status{font-size:.7rem;padding:.15rem .45rem;border-radius:50px;}
+.dp-green{background:#D1FAE5;color:#065F46;}
+.dp-amber{background:#FEF3C7;color:#92400E;}
+.dp-red{background:#FEE2E2;color:#991B1B;}
+</style>
+{% endblock %}
+{% block body %}
+<div class="page-wrapper">
+<div class="container-xl py-4">
+
+  {% set prob = results.probability %}
+  {% set risk = results.risk_level %}
+  {% set plan = sub.plan if sub else 'free' %}
+
+  <!-- Header -->
+  <div class="report-header mb-4">
+    <div>
+      <div class="rh-company">{{ pred.company_name }}</div>
+      <div class="rh-date">Analysis run: {{ pred.created_at[:16] }}</div>
+    </div>
+    <span class="risk-pill-lg risk-{{ risk|lower }}">
+      {% if risk == 'HIGH' %}🚨{% elif risk == 'MODERATE' %}⚠️{% else %}✅{% endif %}
+      {{ risk }} RISK
+    </span>
+  </div>
+
+  <!-- Row 1: Gauge + Key Drivers -->
+  <div class="row g-4 mb-4">
+    <div class="col-lg-4">
+      <div class="panel h-100">
+        <div class="panel-head"><i class="fas fa-robot me-2"></i>AI Prediction</div>
+        <div class="panel-body text-center py-4">
+          <div class="big-gauge gauge-{{ risk|lower }}">
+            <div class="bg-val">{{ prob }}%</div>
+            <div class="bg-lbl">Bankruptcy<br>Probability</div>
+          </div>
+          <div class="mt-3">
+            <div class="prob-track">
+              <div class="prob-fill" style="width:{{ prob }}%"></div>
+            </div>
+            <div class="text-muted small mt-1">{{ prob }}% bankruptcy risk</div>
+          </div>
+          <div class="mt-3 text-muted small">Random Forest · 97.67% accuracy · 6-feature XAI model</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-8">
+      <div class="panel h-100">
+        <div class="panel-head"><i class="fas fa-chart-bar me-2"></i>Key Prediction Drivers</div>
+        <div class="panel-body">
+          {% for f in factors %}
+          <div class="factor-row">
+            <div class="fr-rank">{{ loop.index }}</div>
+            <div class="fr-info">
+              <span class="fr-code">{{ f.feature }}</span>
+              <span class="fr-label">{{ f.label }}</span>
+              <span class="fr-dir {{ 'dir-risk' if f.is_risky else 'dir-safe' }}">
+                {{ '↑ Risk' if f.is_risky else '↓ Safe' }}
+              </span>
+            </div>
+            <div class="fr-val">{{ f.raw_value }}</div>
+            <div class="fr-bar-col">
+              <div class="fr-bar-bg">
+                <div class="fr-bar-fill" style="width:{{ f.contribution }}%"></div>
+              </div>
+              <div class="fr-pct">{{ f.contribution }}%</div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── XAI Section ── -->
+  <h4 class="section-heading mb-3"><i class="fas fa-brain me-2"></i>Explainable AI Analysis</h4>
+  <div class="panel mb-4">
+    <div class="panel-head">
+      <i class="fas fa-microscope me-2"></i>XAI Methods
+      {% if plan == 'free' %}
+        <span class="badge bg-warning text-dark ms-2">Upgrade for SHAP · LIME · DiCE</span>
+      {% endif %}
+    </div>
+    <div class="panel-body">
+      <div class="xai-tabs">
+        <div class="xai-tab active" onclick="showXai('fi')">Feature Importance</div>
+        {% if xai_data.shap is defined and not xai_data.shap.get('error') %}
+        <div class="xai-tab" onclick="showXai('shap')">
+          SHAP{% if xai_data.shap.get('approximated') %} <small>(approx)</small>{% endif %}
+        </div>
+        {% endif %}
+        {% if xai_data.lime is defined and not xai_data.lime.get('error') %}
+        <div class="xai-tab" onclick="showXai('lime')">
+          LIME{% if xai_data.lime.get('approximated') %} <small>(approx)</small>{% endif %}
+        </div>
+        {% endif %}
+        {% if xai_data.dice is defined and not xai_data.dice.get('error') %}
+        <div class="xai-tab" onclick="showXai('dice')">DiCE Counterfactuals</div>
+        {% endif %}
+      </div>
+
+      <!-- Feature Importance Panel -->
+      <div id="xai-fi" class="xai-panel active">
+        {% if xai_data.feature_importance %}
+        {% set fi = xai_data.feature_importance %}
+        <div class="xai-desc">{{ fi.description }}</div>
+        <canvas id="fiChart" height="120"></canvas>
+        {% else %}
+        <p class="text-muted small">Feature importance data unavailable.</p>
+        {% endif %}
+      </div>
+
+      <!-- SHAP Panel -->
+      <div id="xai-shap" class="xai-panel">
+        {% if xai_data.shap is defined and not xai_data.shap.get('error') %}
+        {% set sh = xai_data.shap %}
+        <div class="xai-desc">
+          {% if sh.get('approximated') %}<span class="text-warning fw-bold">[Approximation]</span> {% endif %}
+          {{ sh.description }}
+        </div>
+        <div class="mb-2 text-muted small">Base probability: <strong>{{ sh.base_value }}%</strong></div>
+        {% for f in sh.features %}
+        <div class="shap-row">
+          <div class="sr-label">
+            <span class="fr-code">{{ f.feature }}</span> {{ f.label }}
+          </div>
+          <div class="sr-val" style="color:{{ '#EF4444' if f.shap_value > 0 else '#10B981' }}">
+            {{ '+' if f.shap_value > 0 else '' }}{{ f.shap_value }}
+          </div>
+          <div class="sr-bar">
+            {% set bar_pct = [([f.shap_value|abs * 300, 100]|min), 2]|max %}
+            <div class="sr-bar-track">
+              {% if f.shap_value > 0 %}
+                <div class="sr-bar-pos" style="width:{{ bar_pct }}%"></div>
+              {% else %}
+                <div class="sr-bar-neg" style="width:{{ bar_pct }}%"></div>
+              {% endif %}
+            </div>
+          </div>
+          <div class="sr-impact sr-{{ f.color }}">{{ f.impact }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="upgrade-lock">
+          <i class="fas fa-lock fa-2x mb-2"></i>
+          <div>SHAP explanations require the <strong>Starter</strong> plan or above.</div>
+          <a href="{{ url_for('subscription') }}">Upgrade now →</a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- LIME Panel -->
+      <div id="xai-lime" class="xai-panel">
+        {% if xai_data.lime is defined and not xai_data.lime.get('error') %}
+        {% set li = xai_data.lime %}
+        <div class="xai-desc">
+          {% if li.get('approximated') %}<span class="text-warning fw-bold">[Approximation]</span> {% endif %}
+          {{ li.description }}
+        </div>
+        <canvas id="limeChart" height="120"></canvas>
+        {% for f in li.features %}
+        <div class="lime-row" style="display:none">
+          <div class="lime-feat">{{ f.feature }}</div>
+          <div class="lime-label">{{ f.label }}</div>
+          <div class="lime-cond small text-muted">{{ f.condition }}</div>
+          <div class="lime-weight">{{ f.weight }}</div>
+          <div class="lime-impact sr-{{ f.color }}">{{ f.impact }}</div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="upgrade-lock">
+          <i class="fas fa-lock fa-2x mb-2"></i>
+          <div>LIME explanations require the <strong>Professional</strong> plan.</div>
+          <a href="{{ url_for('subscription') }}">Upgrade now →</a>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- DiCE Panel -->
+      <div id="xai-dice" class="xai-panel">
+        {% if xai_data.dice is defined and not xai_data.dice.get('error') %}
+        {% set di = xai_data.dice %}
+        <div class="xai-desc">
+          {% if di.get('approximated') %}<span class="text-warning fw-bold">[Approximation]</span> {% endif %}
+          {{ di.description }}
+        </div>
+        <div class="mb-3">
+          <span class="badge bg-danger me-2">Current: {{ di.current_outcome }}</span>
+          <i class="fas fa-arrow-right text-muted mx-1"></i>
+          <span class="badge bg-success ms-2">Target: {{ di.desired_outcome }}</span>
+        </div>
+        {% if di.counterfactuals %}
+          {% for cf in di.counterfactuals %}
+          <div class="cf-card">
+            <div class="cf-title">Scenario {{ loop.index }}: Changes needed to reach "{{ di.desired_outcome }}"</div>
+            {% for ch in cf %}
+            <div class="cf-change">
+              <span><span class="fr-code">{{ ch.feature }}</span> {{ ch.label }}</span>
+              <span>{{ ch.original }}</span>
+              <span class="cf-change-dir">
+                {{ ch.get('direction', '→') }} {{ ch.suggested }}
+              </span>
+            </div>
+            {% endfor %}
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted small">No feasible counterfactuals found. The prediction is very robust.</p>
+        {% endif %}
+        {% else %}
+        <div class="upgrade-lock">
+          <i class="fas fa-lock fa-2x mb-2"></i>
+          <div>DiCE counterfactuals require the <strong>Professional</strong> plan.</div>
+          <a href="{{ url_for('subscription') }}">Upgrade now →</a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Valuation Models ── -->
+  <h4 class="section-heading mb-3"><i class="fas fa-chart-line me-2"></i>Industry Valuation Models</h4>
+  <div class="row g-3 mb-4">
+
+    {% if valuation.altman %}{% set a = valuation.altman %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ a.color }}">
+        <div class="vmr-header">
+          <span class="vmr-name">Altman Z-Score</span>
+          <span class="vmr-badge badge-{{ a.color }}">{{ a.zone }}</span>
+        </div>
+        <div class="vmr-score">{{ a.score }}</div>
+        <div class="vmr-interp">{{ a.interpretation }}</div>
+        <div class="vmr-components mt-2">
+          {% for k,v in a.components.items() %}
+          <div class="vmc-row"><span>{{ k }}</span><span>{{ v }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.ohlson %}{% set o = valuation.ohlson %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ o.color }}">
+        <div class="vmr-header">
+          <span class="vmr-name">Ohlson O-Score</span>
+          <span class="vmr-badge badge-{{ o.color }}">{{ o.risk }}</span>
+        </div>
+        <div class="vmr-score">{{ o.score }}</div>
+        <div class="vmr-interp">{{ o.interpretation }}</div>
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.dcf %}{% set d = valuation.dcf %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ d.get('color','blue') }}">
+        <div class="vmr-header">
+          <span class="vmr-name">DCF Analysis</span>
+          <span class="vmr-badge badge-{{ d.get('color','blue') }}">{{ d.get('valuation','N/A') }}</span>
+        </div>
+        <div class="vmr-score">{{ d.get('intrinsic_value_per_share','N/A') }}</div>
+        <div class="vmr-interp">{{ d.get('interpretation','') }}</div>
+        {% if d.get('components') %}
+        <div class="vmr-components mt-2">
+          {% for k,v in d.components.items() %}
+          <div class="vmc-row"><span>{{ k }}</span><span>{{ v }}</span></div>
+          {% endfor %}
+        </div>{% endif %}
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.piotroski %}{% set pf = valuation.piotroski %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ pf.get('color','amber') }}">
+        <div class="vmr-header">
+          <span class="vmr-name">Piotroski F-Score</span>
+          <span class="vmr-badge badge-{{ pf.get('color','amber') }}">{{ pf.get('verdict','') }}</span>
+        </div>
+        <div class="vmr-score">{{ pf.get('score','N/A') }} / 9</div>
+        <div class="vmr-interp">{{ pf.get('interpretation','') }}</div>
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.dupont %}{% set dp = valuation.dupont %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ dp.color }}">
+        <div class="vmr-header">
+          <span class="vmr-name">DuPont Analysis</span>
+          <span class="vmr-badge badge-{{ dp.color }}">ROE {{ dp.roe }}%</span>
+        </div>
+        <div class="vmr-score">{{ dp.roe }}%</div>
+        <div class="vmr-interp">{{ dp.interpretation }}</div>
+        <div class="vmr-components mt-2">
+          {% for k,v in dp.components.items() %}
+          <div class="dupont-row">
+            <span class="dp-label">{{ k }}</span>
+            <div class="d-flex align-items-center gap-2">
+              <span class="dp-val">{{ v.value }}{{ v.unit }}</span>
+              <span class="dp-status dp-{{ v.color }}">{{ v.status }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.ev_ebitda %}{% set ev = valuation.ev_ebitda %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ ev.color }}">
+        <div class="vmr-header">
+          <span class="vmr-name">EV/EBITDA</span>
+          <span class="vmr-badge badge-{{ ev.color }}">{{ ev.valuation }}</span>
+        </div>
+        <div class="vmr-score">{{ ev.ev_ebitda }}x</div>
+        <div class="vmr-interp">{{ ev.interpretation }}</div>
+        <div class="vmr-components mt-2">
+          <div class="vmc-row"><span>Industry Median</span><span>{{ ev.industry_median }}x</span></div>
+          <div class="vmc-row"><span>Premium/Discount</span><span>{{ ev.premium_discount }}%</span></div>
+        </div>
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.liquidity %}{% set lq = valuation.liquidity %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ lq.color }}">
+        <div class="vmr-header">
+          <span class="vmr-name">Liquidity Analysis</span>
+          <span class="vmr-badge badge-{{ lq.color }}">{{ lq.overall }}</span>
+        </div>
+        <div class="vmr-score">{{ lq.overall }}</div>
+        <div class="vmr-interp">{{ lq.interpretation }}</div>
+        <div class="vmr-components mt-2">
+          {% for r in lq.ratios %}
+          <div class="vmc-row">
+            <span>{{ r.name }}</span>
+            <span style="color:{{'#10B981' if r.color=='green' else '#F59E0B' if r.color=='amber' else '#EF4444'}}">
+              {{ r.value }} ({{ r.status }})
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.beneish %}{% set bm = valuation.beneish %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ bm.get('color','amber') }}">
+        <div class="vmr-header">
+          <span class="vmr-name">Beneish M-Score</span>
+          <span class="vmr-badge badge-{{ bm.get('color','amber') }}">{{ bm.get('verdict','') }}</span>
+        </div>
+        <div class="vmr-score">{{ bm.get('score','N/A') }}</div>
+        <div class="vmr-interp">{{ bm.get('interpretation','') }}</div>
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.gordon %}{% set gm = valuation.gordon %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ gm.color }}">
+        <div class="vmr-header">
+          <span class="vmr-name">Gordon Growth Model</span>
+          <span class="vmr-badge badge-{{ gm.color }}">{{ gm.valuation }}</span>
+        </div>
+        <div class="vmr-score">{{ gm.intrinsic_value }}</div>
+        <div class="vmr-interp">{{ gm.interpretation }}</div>
+        <div class="vmr-components mt-2">
+          <div class="vmc-row"><span>Growth Rate</span><span>{{ gm.growth_rate }}%</span></div>
+          <div class="vmc-row"><span>Required Return</span><span>{{ gm.required_return }}%</span></div>
+        </div>
+      </div>
+    </div>{% endif %}
+
+    {% if valuation.merton %}{% set mt = valuation.merton %}
+    <div class="col-md-6 col-lg-4">
+      <div class="vm-result-card vc-{{ mt.color }}">
+        <div class="vmr-header">
+          <span class="vmr-name">Merton Distance-to-Default</span>
+          <span class="vmr-badge badge-{{ mt.color }}">{{ mt.zone }}</span>
+        </div>
+        <div class="vmr-score">{{ mt.distance_to_default }}σ</div>
+        <div class="vmr-interp">{{ mt.interpretation }}</div>
+        <div class="vmr-components mt-2">
+          <div class="vmc-row"><span>Default Probability</span><span>{{ mt.default_probability }}%</span></div>
+        </div>
+      </div>
+    </div>{% endif %}
+
+    {% if plan == 'free' %}
+    <div class="col-12">
+      <div class="upgrade-lock">
+        <i class="fas fa-lock fa-lg mb-2"></i>
+        <div class="fw-bold mb-1">Unlock 9 more valuation models</div>
+        <div class="small mb-2">DCF · Ohlson · Piotroski · DuPont · EV/EBITDA · Beneish · Gordon Growth · Merton · Liquidity</div>
+        <a href="{{ url_for('subscription') }}" class="btn btn-sm btn-primary">View plans →</a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="text-center mb-4">
+    <a href="{{ url_for('predict') }}" class="btn btn-primary me-2">
+      <i class="fas fa-plus me-1"></i>New Analysis
+    </a>
+    <a href="{{ url_for('history') }}" class="btn btn-outline-secondary">
+      <i class="fas fa-history me-1"></i>View History
+    </a>
+  </div>
+
+</div>
+</div>
+
+<script>
+// ── Tab switching ──────────────────────────────────────────────────────────
+function showXai(tab) {
+  document.querySelectorAll('.xai-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.xai-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('xai-'+tab).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── Feature Importance Chart ───────────────────────────────────────────────
+{% if xai_data.feature_importance %}
+{% set fi = xai_data.feature_importance %}
+const fiLabels = [{% for f in fi.global_importance %}"{{ f.feature }}"{% if not loop.last %},{% endif %}{% endfor %}];
+const fiData   = [{% for f in fi.global_importance %}{{ f.pct }}{% if not loop.last %},{% endif %}{% endfor %}];
+new Chart(document.getElementById('fiChart'), {
+  type: 'bar',
+  data: {
+    labels: fiLabels,
+    datasets: [{
+      label: 'Importance (%)',
+      data: fiData,
+      backgroundColor: ['#6366F1','#8B5CF6','#A78BFA','#C4B5FD','#DDD6FE','#EDE9FE'],
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: { y: { beginAtZero: true, title: { display: true, text: '% Importance' } } }
+  }
+});
+{% endif %}
+
+// ── LIME Chart ─────────────────────────────────────────────────────────────
+{% if xai_data.lime is defined and not xai_data.lime.get('error') %}
+{% set li = xai_data.lime %}
+const limeFeats   = [{% for f in li.features %}"{{ f.feature }}"{% if not loop.last %},{% endif %}{% endfor %}];
+const limeWeights = [{% for f in li.features %}{{ f.weight }}{% if not loop.last %},{% endif %}{% endfor %}];
+const limeColors  = limeWeights.map(w => w > 0 ? '#EF4444' : '#10B981');
+new Chart(document.getElementById('limeChart'), {
+  type: 'bar',
+  data: {
+    labels: limeFeats,
+    datasets: [{
+      label: 'LIME Weight',
+      data: limeWeights,
+      backgroundColor: limeColors,
+      borderRadius: 6,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { title: { display: true, text: 'Weight (+ = bankruptcy risk)' } },
+      x: {}
+    }
+  }
+});
+{% endif %}
+</script>
+{% endblock %}

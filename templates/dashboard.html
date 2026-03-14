@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FinRisk Intelligence — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- NOISE OVERLAY -->
+<div class="noise"></div>
+
+<!-- NAV -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-text">FinRisk<span class="brand-accent">Intelligence</span></span>
+  </div>
+  <div class="nav-center">
+    <div class="search-wrap">
+      <input type="text" id="globalSearch" placeholder="Search company…" autocomplete="off"/>
+      <div id="searchDropdown" class="search-dropdown hidden"></div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <span class="nav-badge" id="navTotal">— companies</span>
+    <a href="/" class="nav-link active">Dashboard</a>
+    <a href="/predict" class="nav-link">Predict</a>
+  </div>
+</nav>
+
+<!-- HERO STRIP -->
+<div class="hero-strip">
+  <div class="hero-content">
+    <p class="hero-label">AI-Powered Financial Distress Analysis</p>
+    <h1 class="hero-title">Risk Intelligence<br/><span class="hero-accent">Command Center</span></h1>
+    <p class="hero-sub">Unsupervised ML · Weighted Ratio Scoring · Altman Z-Score · Explainable AI</p>
+  </div>
+  <div class="hero-stats" id="heroStats">
+    <div class="hstat skeleton"><div class="hstat-val">—</div><div class="hstat-lbl">Companies Analyzed</div></div>
+    <div class="hstat skeleton"><div class="hstat-val">—</div><div class="hstat-lbl">High Risk</div></div>
+    <div class="hstat skeleton"><div class="hstat-val">—</div><div class="hstat-lbl">Anomalies Detected</div></div>
+    <div class="hstat skeleton"><div class="hstat-val">—</div><div class="hstat-lbl">Avg Risk Score</div></div>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<main class="main-grid">
+
+  <!-- ROW 1: Risk Distribution + Cluster Donut -->
+  <section class="grid-row two-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">◉</span>
+        <h2 class="card-title">Risk Distribution</h2>
+        <span class="card-subtitle">All 5,000 companies</span>
+      </div>
+      <div class="chart-wrap" style="height:280px">
+        <canvas id="riskBarChart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">◎</span>
+        <h2 class="card-title">Cluster Breakdown</h2>
+        <span class="card-subtitle">K-Means (k=4)</span>
+      </div>
+      <div class="chart-wrap" style="height:280px">
+        <canvas id="clusterDonut"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ROW 2: PCA Scatter -->
+  <section class="grid-row one-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">⬡</span>
+        <h2 class="card-title">PCA Risk Landscape</h2>
+        <span class="card-subtitle">2D principal component projection — colour by risk category</span>
+        <div class="legend-row">
+          <span class="leg low">● Low Risk</span>
+          <span class="leg med">● Medium Risk</span>
+          <span class="leg high">● High Risk</span>
+          <span class="leg anom">◆ Anomaly</span>
+        </div>
+      </div>
+      <div class="chart-wrap" style="height:380px">
+        <canvas id="pcaScatter"></canvas>
+      </div>
+      <div class="pca-variance" id="pcaVariance"></div>
+    </div>
+  </section>
+
+  <!-- ROW 3: High-Risk Table + Cluster Cards -->
+  <section class="grid-row two-col">
+    <div class="card wide-card">
+      <div class="card-header">
+        <span class="card-icon">⚠</span>
+        <h2 class="card-title">High-Risk Companies</h2>
+        <span class="card-subtitle">Top 20 by risk score</span>
+      </div>
+      <div class="table-wrap">
+        <table class="risk-table" id="highRiskTable">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Company</th>
+              <th>Risk Score</th>
+              <th>Category</th>
+              <th>Altman Z</th>
+              <th>Cluster</th>
+              <th>Anomaly</th>
+            </tr>
+          </thead>
+          <tbody id="highRiskBody">
+            <tr><td colspan="7" class="loading-cell">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">▣</span>
+        <h2 class="card-title">Cluster Intelligence</h2>
+        <span class="card-subtitle">Financial health segments</span>
+      </div>
+      <div id="clusterCards" class="cluster-cards"></div>
+    </div>
+  </section>
+
+  <!-- ROW 4: Full Company Browser -->
+  <section class="grid-row one-col">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-icon">☰</span>
+        <h2 class="card-title">Company Browser</h2>
+        <div class="browser-filters">
+          <input type="text" id="tableSearch" placeholder="Filter by name…"/>
+          <select id="categoryFilter">
+            <option value="">All Categories</option>
+            <option value="High Risk">High Risk</option>
+            <option value="Medium Risk">Medium Risk</option>
+            <option value="Low Risk">Low Risk</option>
+          </select>
+          <select id="sortSelect">
+            <option value="risk_score">Sort: Risk Score</option>
+            <option value="altman_z">Sort: Altman Z</option>
+            <option value="company_name">Sort: Name</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="risk-table" id="browserTable">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Symbol</th>
+              <th>Risk Score</th>
+              <th>Category</th>
+              <th>Current Ratio</th>
+              <th>D/E Ratio</th>
+              <th>Profit Margin</th>
+              <th>Cluster</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="browserBody">
+            <tr><td colspan="9" class="loading-cell">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pagination"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span>FinRisk Intelligence © 2024</span>
+  <span class="footer-sep">|</span>
+  <span>Powered by K-Means · Isolation Forest · PCA · Weighted Scoring · Altman Z-Score</span>
+</footer>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script>
+// ── Dashboard bootstrap ───────────────────────────────────────────────────────
+let currentPage = 1;
+let currentCategory = "";
+let currentSearch   = "";
+let currentSort     = "risk_score";
+
+async function loadDashboard() {
+  const res  = await fetch("/api/dashboard");
+  const data = await res.json();
+  renderHeroStats(data.stats);
+  renderRiskBar(data.risk_distribution);
+  renderClusterDonut(data.cluster_summary);
+  renderHighRiskTable(data.high_risk_companies);
+  renderClusterCards(data.cluster_summary);
+  document.getElementById("navTotal").textContent =
+    `${data.stats.total_companies.toLocaleString()} companies`;
+}
+
+async function loadPCA() {
+  const res  = await fetch("/api/pca");
+  const data = await res.json();
+  renderPCAScatter(data.points);
+  const v = data.pca_variance;
+  document.getElementById("pcaVariance").textContent =
+    `PC1 explains ${(v[0]*100).toFixed(1)}% variance · PC2 explains ${(v[1]*100).toFixed(1)}% variance`;
+}
+
+async function loadBrowser() {
+  const params = new URLSearchParams({
+    page: currentPage, per_page: 25,
+    category: currentCategory,
+    search: currentSearch,
+    sort: currentSort, order: "desc",
+  });
+  const res  = await fetch("/api/companies?" + params);
+  const data = await res.json();
+  renderBrowserTable(data.companies);
+  renderPagination(data.total, data.page, data.per_page);
+}
+
+// ── Render functions ──────────────────────────────────────────────────────────
+function renderHeroStats(s) {
+  const container = document.getElementById("heroStats");
+  container.innerHTML = `
+    <div class="hstat fade-in"><div class="hstat-val">${s.total_companies.toLocaleString()}</div><div class="hstat-lbl">Companies Analyzed</div></div>
+    <div class="hstat fade-in" style="animation-delay:.1s"><div class="hstat-val high-txt">${s.high_risk_count.toLocaleString()}</div><div class="hstat-lbl">High Risk</div></div>
+    <div class="hstat fade-in" style="animation-delay:.2s"><div class="hstat-val warn-txt">${s.anomaly_count.toLocaleString()}</div><div class="hstat-lbl">Anomalies Detected</div></div>
+    <div class="hstat fade-in" style="animation-delay:.3s"><div class="hstat-val">${s.avg_risk_score}</div><div class="hstat-lbl">Avg Risk Score</div></div>
+  `;
+}
+
+let riskBarChart, clusterDonut, pcaChart;
+
+function renderRiskBar(dist) {
+  const ctx = document.getElementById("riskBarChart").getContext("2d");
+  const labels = ["Low Risk","Medium Risk","High Risk"];
+  const values = labels.map(l => dist[l] || 0);
+  if (riskBarChart) riskBarChart.destroy();
+  riskBarChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: ["#22c55e99","#f59e0b99","#ef444499"],
+        borderColor:     ["#22c55e","#f59e0b","#ef4444"],
+        borderWidth: 2,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: {
+        label: ctx => `  ${ctx.parsed.y.toLocaleString()} companies`
+      }}},
+      scales: {
+        x: { grid: { color: "#1e2433" }, ticks: { color: "#8892a4", font: { family: "IBM Plex Mono" } } },
+        y: { grid: { color: "#1e2433" }, ticks: { color: "#8892a4", font: { family: "IBM Plex Mono" } } }
+      },
+      animation: { duration: 800, easing: "easeOutQuart" }
+    }
+  });
+}
+
+function renderClusterDonut(clusters) {
+  const ctx = document.getElementById("clusterDonut").getContext("2d");
+  const colors = ["#22c55e","#f59e0b","#ef4444","#6366f1"];
+  if (clusterDonut) clusterDonut.destroy();
+  clusterDonut = new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: clusters.map(c => c.cluster_label),
+      datasets: [{
+        data: clusters.map(c => c.count),
+        backgroundColor: colors.map(c => c + "99"),
+        borderColor: colors,
+        borderWidth: 2,
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: "65%",
+      plugins: {
+        legend: { position:"right", labels:{ color:"#8892a4", font:{ family:"IBM Plex Mono", size:11 }, padding:16 } },
+        tooltip: { callbacks: { label: ctx => `  ${ctx.label}: ${ctx.parsed.toLocaleString()}` }}
+      },
+      animation: { duration: 900, easing: "easeOutQuart" }
+    }
+  });
+}
+
+function renderPCAScatter(points) {
+  const ctx = document.getElementById("pcaScatter").getContext("2d");
+  const colorMap = { "Low Risk":"#22c55e", "Medium Risk":"#f59e0b", "High Risk":"#ef4444" };
+  
+  const datasets = ["Low Risk","Medium Risk","High Risk"].map(cat => ({
+    label: cat,
+    data: points.filter(p => p.risk_category === cat && !p.is_anomaly)
+                .map(p => ({ x: p.x, y: p.y, company: p.company_name, score: p.risk_score })),
+    backgroundColor: colorMap[cat] + "55",
+    borderColor: colorMap[cat] + "aa",
+    borderWidth: 0.5,
+    pointRadius: 2.5,
+    pointHoverRadius: 6,
+  }));
+
+  // Anomaly dataset
+  datasets.push({
+    label: "Anomaly",
+    data: points.filter(p => p.is_anomaly)
+                .map(p => ({ x: p.x, y: p.y, company: p.company_name, score: p.risk_score })),
+    backgroundColor: "#ffffff33",
+    borderColor: "#ffffff",
+    borderWidth: 1,
+    pointRadius: 4,
+    pointStyle: "rectRot",
+    pointHoverRadius: 8,
+  });
+
+  if (pcaChart) pcaChart.destroy();
+  pcaChart = new Chart(ctx, {
+    type: "scatter",
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color:"#8892a4", font:{ family:"IBM Plex Mono", size:11 }, padding:16 } },
+        tooltip: { callbacks: {
+          label: ctx => `${ctx.raw.company}  |  Score: ${ctx.raw.score}`
+        }}
+      },
+      scales: {
+        x: { grid:{ color:"#1a2035" }, ticks:{ color:"#8892a4", font:{ family:"IBM Plex Mono", size:10 } }, title:{ display:true, text:"PC1", color:"#4a5568" } },
+        y: { grid:{ color:"#1a2035" }, ticks:{ color:"#8892a4", font:{ family:"IBM Plex Mono", size:10 } }, title:{ display:true, text:"PC2", color:"#4a5568" } }
+      },
+      animation: { duration: 600 }
+    }
+  });
+}
+
+function riskBadge(cat) {
+  const cls = cat === "High Risk" ? "badge-high" : cat === "Medium Risk" ? "badge-med" : "badge-low";
+  return `<span class="risk-badge ${cls}">${cat}</span>`;
+}
+
+function renderHighRiskTable(companies) {
+  const tbody = document.getElementById("highRiskBody");
+  tbody.innerHTML = companies.map((c, i) => `
+    <tr class="table-row-anim" style="animation-delay:${i*30}ms">
+      <td class="mono dim">${i+1}</td>
+      <td><a href="/company/${encodeURIComponent(c.company_name)}" class="company-link">${c.company_name}</a></td>
+      <td><span class="score-pill ${c.risk_score >= 60 ? 'score-high' : c.risk_score >= 33 ? 'score-med' : 'score-low'}">${c.risk_score}</span></td>
+      <td>${riskBadge("High Risk")}</td>
+      <td class="mono">${c.altman_z !== null ? c.altman_z.toFixed(2) : "—"}</td>
+      <td class="mono dim" style="font-size:.8rem">${c.cluster_label}</td>
+      <td>${c.is_anomaly ? '<span class="anom-flag">◆ YES</span>' : '<span class="dim">—</span>'}</td>
+    </tr>
+  `).join("");
+}
+
+function renderClusterCards(clusters) {
+  const container = document.getElementById("clusterCards");
+  const colors = ["#22c55e","#f59e0b","#ef4444","#6366f1"];
+  container.innerHTML = clusters.map((c, i) => `
+    <div class="cluster-card fade-in" style="animation-delay:${i*100}ms; border-left-color:${colors[i]}">
+      <div class="cc-label">${c.cluster_label}</div>
+      <div class="cc-row">
+        <span class="cc-count">${c.count.toLocaleString()} companies</span>
+        <span class="cc-risk">Avg score: <b>${c.avg_risk_score}</b></span>
+      </div>
+      <div class="cc-bar-wrap">
+        <div class="cc-bar" style="width:${c.high_risk_pct}%; background:${colors[i]}44; border-right:2px solid ${colors[i]}"></div>
+      </div>
+      <div class="cc-pct">${c.high_risk_pct}% high risk in cluster</div>
+    </div>
+  `).join("");
+}
+
+function renderBrowserTable(companies) {
+  const tbody = document.getElementById("browserBody");
+  if (!companies.length) {
+    tbody.innerHTML = `<tr><td colspan="9" class="loading-cell">No companies found</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = companies.map(c => `
+    <tr>
+      <td><a href="/company/${encodeURIComponent(c.company_name)}" class="company-link">${c.company_name}</a></td>
+      <td class="mono dim">${c.tradingsymbol}</td>
+      <td><span class="score-pill ${c.risk_score >= 60 ? 'score-high' : c.risk_score >= 33 ? 'score-med' : 'score-low'}">${c.risk_score}</span></td>
+      <td>${riskBadge(c.risk_category)}</td>
+      <td class="mono">${c.current_ratio !== null ? c.current_ratio.toFixed(2) : "—"}</td>
+      <td class="mono">${c.debt_to_equity !== null ? c.debt_to_equity.toFixed(2) : "—"}</td>
+      <td class="mono">${c.profit_margin !== null ? (c.profit_margin*100).toFixed(1)+"%" : "—"}</td>
+      <td class="mono dim" style="font-size:.78rem">${c.cluster_label}</td>
+      <td><a href="/company/${encodeURIComponent(c.company_name)}" class="btn-view">View →</a></td>
+    </tr>
+  `).join("");
+}
+
+function renderPagination(total, page, perPage) {
+  const pages = Math.ceil(total / perPage);
+  const container = document.getElementById("pagination");
+  if (pages <= 1) { container.innerHTML = ""; return; }
+
+  let html = `<span class="page-info">Page ${page} of ${pages} · ${total.toLocaleString()} results</span>`;
+  html += `<div class="page-btns">`;
+  if (page > 1) html += `<button onclick="changePage(${page-1})">← Prev</button>`;
+  
+  // Window of 5 pages
+  const start = Math.max(1, page-2), end = Math.min(pages, page+2);
+  for (let p = start; p <= end; p++) {
+    html += `<button class="${p===page?'active':''}" onclick="changePage(${p})">${p}</button>`;
+  }
+  if (page < pages) html += `<button onclick="changePage(${page+1})">Next →</button>`;
+  html += `</div>`;
+  container.innerHTML = html;
+}
+
+function changePage(p) {
+  currentPage = p;
+  loadBrowser();
+  document.getElementById("browserTable").scrollIntoView({behavior:"smooth"});
+}
+
+// ── Event listeners ──────────────────────────────────────────────────────────
+let searchTimer;
+document.getElementById("tableSearch").addEventListener("input", e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    currentSearch = e.target.value;
+    currentPage = 1;
+    loadBrowser();
+  }, 350);
+});
+
+document.getElementById("categoryFilter").addEventListener("change", e => {
+  currentCategory = e.target.value;
+  currentPage = 1;
+  loadBrowser();
+});
+
+document.getElementById("sortSelect").addEventListener("change", e => {
+  currentSort = e.target.value;
+  currentPage = 1;
+  loadBrowser();
+});
+
+// Global search nav bar
+const gSearch = document.getElementById("globalSearch");
+const gDrop   = document.getElementById("searchDropdown");
+let gTimer;
+gSearch.addEventListener("input", e => {
+  clearTimeout(gTimer);
+  const q = e.target.value.trim();
+  if (q.length < 2) { gDrop.classList.add("hidden"); return; }
+  gTimer = setTimeout(async () => {
+    const res  = await fetch("/api/search?q=" + encodeURIComponent(q));
+    const data = await res.json();
+    if (!data.results.length) { gDrop.classList.add("hidden"); return; }
+    gDrop.innerHTML = data.results.map(r => `
+      <a href="/company/${encodeURIComponent(r.company_name)}" class="drop-item">
+        <span>${r.company_name}</span>
+        <span class="drop-score ${r.risk_score >= 60 ? 'score-high' : r.risk_score >= 33 ? 'score-med' : 'score-low'}">${r.risk_score}</span>
+      </a>
+    `).join("");
+    gDrop.classList.remove("hidden");
+  }, 300);
+});
+
+document.addEventListener("click", e => {
+  if (!gSearch.contains(e.target)) gDrop.classList.add("hidden");
+});
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+loadDashboard();
+loadPCA();
+loadBrowser();
+</script>
+</body>
+</html>

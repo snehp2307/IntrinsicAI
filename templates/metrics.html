@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Model Metrics — FinRisk Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="noise"></div>
+<nav class="navbar">
+  <div class="nav-brand">
+    <span class="brand-icon">◈</span>
+    <span class="brand-text">FinRisk<span class="brand-accent">Intelligence</span></span>
+  </div>
+  <div class="nav-right">
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/predict" class="nav-link">Predict</a>
+    <a href="/metrics" class="nav-link active">Metrics</a>
+  </div>
+</nav>
+
+<main style="max-width:1000px;margin:2rem auto;padding:0 1.5rem;">
+  <h1 style="font-size:1.6rem;font-weight:700;margin-bottom:.3rem;">Model Performance Metrics</h1>
+  <p style="color:#8892a4;margin-bottom:2rem;">Random Forest evaluation on 20% held-out test set.</p>
+
+  <!-- Metric cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:1rem;margin-bottom:2rem;">
+    {% for label, key in [('Accuracy','accuracy'),('Precision','precision'),('Recall','recall'),('F1 Score','f1')] %}
+    <div class="card" style="text-align:center;padding:1.5rem;">
+      <div style="font-size:2rem;font-weight:700;color:#3b82f6;font-family:'IBM Plex Mono',monospace;">
+        {{ metrics.get(key, 0) }}%
+      </div>
+      <div style="color:#8892a4;margin-top:.3rem;font-size:.875rem;">{{ label }}</div>
+    </div>
+    {% endfor %}
+    <div class="card" style="text-align:center;padding:1.5rem;">
+      <div style="font-size:2rem;font-weight:700;color:#22c55e;font-family:'IBM Plex Mono',monospace;">
+        {{ metrics.get('roc_auc', 0) }}
+      </div>
+      <div style="color:#8892a4;margin-top:.3rem;font-size:.875rem;">ROC-AUC</div>
+    </div>
+  </div>
+
+  <!-- Feature Importance -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">◉</span>
+      <h2 class="card-title">Feature Importance</h2>
+      <span class="card-subtitle">Gini impurity reduction — Random Forest</span>
+    </div>
+    <div class="chart-wrap" style="height:320px;">
+      <canvas id="fiChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Feature table -->
+  <div class="card" style="margin-top:1.5rem;">
+    <div class="table-wrap">
+      <table class="risk-table">
+        <thead>
+          <tr><th>Rank</th><th>Feature</th><th>Importance (%)</th></tr>
+        </thead>
+        <tbody>
+          {% for feat, imp in feature_importance %}
+          <tr>
+            <td class="mono dim">{{ loop.index }}</td>
+            <td>{{ feat_labels.get(feat, feat) }}</td>
+            <td>
+              <div style="display:flex;align-items:center;gap:.5rem;">
+                <div style="width:{{ imp }}%;max-width:200px;height:6px;background:#3b82f6;border-radius:3px;"></div>
+                <span class="mono" style="font-size:.85rem;">{{ imp }}%</span>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer class="footer"><span>FinRisk Intelligence © 2024</span></footer>
+
+<script>
+const fi = {{ feature_importance | tojson }};
+const labels_map = {{ feat_labels | tojson }};
+const ctx = document.getElementById('fiChart').getContext('2d');
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: fi.map(([f,_]) => labels_map[f] || f),
+    datasets: [{
+      data: fi.map(([_,v]) => v),
+      backgroundColor: '#3b82f655',
+      borderColor: '#3b82f6',
+      borderWidth: 2,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#1e2433' }, ticks: { color: '#8892a4', font: { family: 'IBM Plex Mono' } } },
+      y: { grid: { color: '#1e2433' }, ticks: { color: '#e2e8f0', font: { family: 'IBM Plex Mono', size: 11 } } }
+    }
+  }
+});
+</script>
+</body>
+</html>
