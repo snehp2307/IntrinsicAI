@@ -1,6 +1,33 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python cache
 __pycache__/
 *.pyc
-venv/
+*.pyo
+*.pyd
+
+# Environment variables
 .env
+
+# Flask instance folder
 instance/
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Compressed files
 *.zip
+*.tar
+*.gz
+
+# Logs
+*.log
+
+# Dataset if large
+data/*.csv
