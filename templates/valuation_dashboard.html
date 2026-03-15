@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+{% block title %}Intrinsic Value Analyser — FinRisk Intelligence{% endblock %}
+
+{% block body %}
+<link rel="stylesheet" href="{{ url_for('static', filename='valuation.css') }}">
+
+<div class="container-fluid px-4 py-4">
+
+  <div class="d-flex align-items-center gap-3 mb-4">
+    <div class="val-icon"><i class="fas fa-chart-line"></i></div>
+    <div>
+      <h1 class="h3 mb-0 fw-bold">Intrinsic Value Analyser</h1>
+      <p class="text-muted mb-0 small">Warren Buffett Owner Earnings · Damodaran DCF · Explainable AI</p>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="row g-3 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label text-muted small">Company / Symbol</label>
+          <div class="position-relative">
+            <input id="symbolInput" type="text" class="form-control val-input"
+                   placeholder="e.g. TCS, INFY, RELIANCE…" autocomplete="off">
+            <ul id="autocompleteList" class="val-autocomplete d-none"></ul>
+          </div>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label text-muted small">Exchange</label>
+          <select id="exchangeSelect" class="form-select val-input">
+            <option value="NSE" selected>NSE</option>
+            <option value="BSE">BSE</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label text-muted small">WACC (%)</label>
+          <input id="waccInput" type="number" step="0.1" value="10" class="form-control val-input" min="1" max="40">
+        </div>
+        <div class="col-md-2 d-grid">
+          <button id="analyseBtn" class="btn btn-primary val-btn" onclick="runFullAnalysis()">
+            <i class="fas fa-bolt me-1"></i> Analyse
+          </button>
+        </div>
+      </div>
+      <div id="companyBar" class="val-company-bar d-none mt-3">
+        <span id="companyName" class="fw-bold"></span>
+        <span class="badge val-badge-sector ms-2" id="companySector"></span>
+        <span class="ms-3 text-muted small">LTP:</span>
+        <span id="companyLTP" class="ms-1 fw-bold val-price"></span>
+        <span class="ms-3 text-muted small">Source:</span>
+        <span id="priceSource" class="ms-1 text-muted small"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingBar" class="d-none text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+    <p class="text-muted mt-2 small">Running valuation models…</p>
+  </div>
+
+  <div id="errorAlert" class="alert alert-danger d-none"></div>
+
+  <div id="resultsSection" class="d-none">
+
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-3">
+        <div class="card val-kpi-card text-center">
+          <div class="card-body">
+            <div class="val-kpi-label">Intrinsic Value</div>
+            <div class="val-kpi-value text-primary" id="kpiIV">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card val-kpi-card text-center">
+          <div class="card-body">
+            <div class="val-kpi-label">Market Price</div>
+            <div class="val-kpi-value" id="kpiPrice">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card val-kpi-card text-center">
+          <div class="card-body">
+            <div class="val-kpi-label">Margin of Safety</div>
+            <div class="val-kpi-value" id="kpiMoS">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-3">
+        <div class="card val-kpi-card text-center">
+          <div class="card-body">
+            <div class="val-kpi-label">Verdict</div>
+            <div class="val-kpi-value" id="kpiVerdict">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-header small fw-semibold"><i class="fas fa-water me-2 text-primary"></i>Projected Free Cash Flows</div>
+          <div class="card-body"><canvas id="fcfChart" height="200"></canvas></div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card h-100">
+          <div class="card-header small fw-semibold"><i class="fas fa-history me-2 text-info"></i>Historical Revenue & Net Income</div>
+          <div class="card-body"><canvas id="historyChart" height="200"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-7">
+        <div class="card h-100">
+          <div class="card-header small fw-semibold"><i class="fas fa-brain me-2 text-warning"></i>AI Explanation</div>
+          <div class="card-body">
+            <p id="xaiExplanation" class="val-explanation"></p>
+            <div id="sensitivityNarrative"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="card h-100">
+          <div class="card-header small fw-semibold"><i class="fas fa-sliders-h me-2 text-success"></i>Key Valuation Drivers</div>
+          <div class="card-body"><canvas id="driversChart" height="200"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-md-7">
+        <div class="card h-100">
+          <div class="card-header small fw-semibold"><i class="fas fa-th-large me-2 text-danger"></i>Bear / Base / Bull Scenarios</div>
+          <div class="card-body">
+            <canvas id="scenarioChart" height="180"></canvas>
+            <div id="scenarioSummary" class="mt-3 small text-muted"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-5">
+        <div class="card h-100">
+          <div class="card-header small fw-semibold"><i class="fas fa-search-dollar me-2 text-info"></i>Reverse DCF</div>
+          <div class="card-body">
+            <div id="reverseDCFPanel"></div>
+            <canvas id="reverseChart" height="160"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header small fw-semibold"><i class="fas fa-table me-2 text-secondary"></i>WACC Sensitivity</div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm val-table mb-0">
+                <thead><tr id="waccTableHead"></tr></thead>
+                <tbody><tr id="waccTableRow"></tr></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="accordion val-accordion">
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed small fw-semibold" type="button"
+                      data-bs-toggle="collapse" data-bs-target="#assumpBody">
+                <i class="fas fa-cog me-2"></i>DCF Assumptions (click to expand / edit)
+              </button>
+            </h2>
+            <div id="assumpBody" class="accordion-collapse collapse">
+              <div class="accordion-body">
+                <div class="row g-3" id="assumptionFields"></div>
+                <button class="btn btn-sm btn-outline-primary mt-3" onclick="runFullAnalysis(true)">
+                  <i class="fas fa-sync-alt me-1"></i> Re-run with these assumptions
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='valuation.js') }}"></script>
+{% endblock %}

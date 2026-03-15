@@ -18,11 +18,15 @@ from flask import (Flask, render_template, request, jsonify,
 import numpy as np
 
 import database as db
-from valuation import run_quick_valuation
+from valuation_models import run_quick_valuation
 from xai_engine import run_all_xai, get_xai_status, local_contribution
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "xai-bankrupt-secret-2024-change-in-prod")
+
+# ── Valuation module blueprint ────────────────────────────────────────────────
+from valuation.routes import valuation_bp
+app.register_blueprint(valuation_bp)
 
 MODELS_DIR             = "models/"
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://127.0.0.1:5000")

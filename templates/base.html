@@ -79,6 +79,21 @@
     opacity: .4;
   }
   .container-xl { max-width: 1200px; }
+
+  .val-nav-btn {
+    background: linear-gradient(135deg,#3b82f6,#6366f1) !important;
+    color: #fff !important;
+    padding: .32rem .85rem !important;
+    border-radius: 20px !important;
+    font-weight: 600 !important;
+    font-size: .82rem !important;
+    letter-spacing: .03em;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    transition: opacity .2s !important;
+  }
+  .val-nav-btn:hover { opacity: .82 !important; color: #fff !important; }
 </style>
 
 {% block head %}{% endblock %}
@@ -102,6 +117,9 @@
       <a href="/login">Login</a>
       <a href="/register">Register</a>
     {% endif %}
+    <a href="/valuation/dashboard" class="val-nav-btn">
+      <i class="fas fa-chart-line"></i> Valuation
+    </a>
   </div>
 </nav>
 

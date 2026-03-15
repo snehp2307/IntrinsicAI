@@ -168,3 +168,30 @@ def get_user_stats(user_id: int) -> dict:
             "SELECT COUNT(*) FROM predictions WHERE user_id=? AND risk_level='HIGH'", (user_id,)
         ).fetchone()[0]
     return {"total_predictions": total, "high_risk": high}
+
+# ── Contributions ─────────────────────────────────────────────────────────────
+
+def mark_contributions_used(contribution_ids: list) -> None:
+    """Mark a list of user contribution IDs as used in retraining."""
+    if not contribution_ids:
+        return
+    placeholders = ",".join("?" * len(contribution_ids))
+    with get_db() as conn:
+        conn.execute(
+            f"UPDATE user_contributions SET used=1 WHERE id IN ({placeholders})",
+            contribution_ids
+        )
+        conn.commit()
+
+
+def get_pending_contributions(limit: int = 500) -> list:
+    """Return user contributions not yet used in retraining."""
+    with get_db() as conn:
+        try:
+            rows = conn.execute(
+                "SELECT * FROM user_contributions WHERE used=0 ORDER BY id LIMIT ?",
+                (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+        except Exception:
+            return []

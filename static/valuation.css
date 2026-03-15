@@ -1,0 +1,174 @@
+/* ── valuation.css ── Intrinsic Value Analyser styles ──────────────────────── */
+
+/* Icon */
+.val-icon {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+/* Inputs */
+.val-input {
+  background: #0a1120 !important;
+  border: 1px solid #1e2d3d !important;
+  color: #e2e8f0 !important;
+  border-radius: 8px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.val-input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.15) !important;
+  outline: none;
+}
+.val-input option { background: #0e1523; }
+
+/* Analyse button */
+.val-btn {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  letter-spacing: .03em;
+  padding: .55rem 1.4rem;
+  transition: opacity .2s, transform .1s;
+}
+.val-btn:hover { opacity: .88; transform: translateY(-1px); }
+.val-btn:active { transform: translateY(0); }
+
+/* Company info bar */
+.val-company-bar {
+  background: #0a1828;
+  border: 1px solid #1e2d3d;
+  border-radius: 8px;
+  padding: .6rem 1rem;
+  display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
+}
+.val-badge-sector {
+  background: rgba(59,130,246,.18);
+  color: #93c5fd;
+  font-size: .7rem;
+  font-weight: 500;
+}
+.val-price { color: #34d399; font-family: 'IBM Plex Mono', monospace; }
+
+/* Autocomplete */
+.val-autocomplete {
+  position: absolute; top: 100%; left: 0; right: 0;
+  background: #0e1523; border: 1px solid #1e2d3d;
+  border-radius: 8px; margin-top: 4px;
+  list-style: none; padding: .3rem 0;
+  z-index: 9999; max-height: 260px; overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+.val-autocomplete li {
+  padding: .55rem 1rem; cursor: pointer;
+  font-size: .88rem; display: flex; justify-content: space-between;
+  transition: background .15s;
+}
+.val-autocomplete li:hover,
+.val-autocomplete li.active { background: #1a2035; }
+.val-autocomplete li .ac-sym { font-weight: 700; color: #60a5fa; font-family: 'IBM Plex Mono', monospace; }
+.val-autocomplete li .ac-name { color: #8892a4; font-size: .8rem; }
+
+/* KPI cards */
+.val-kpi-card {
+  border: 1px solid #1e2d3d;
+  transition: border-color .2s, transform .2s;
+}
+.val-kpi-card:hover { border-color: #3b82f6; transform: translateY(-2px); }
+.val-kpi-label { font-size: .7rem; color: #8892a4; text-transform: uppercase; letter-spacing: .08em; }
+.val-kpi-value { font-size: 1.45rem; font-weight: 700; font-family: 'IBM Plex Mono', monospace; margin-top: .2rem; }
+
+/* Verdict badge */
+.verdict-undervalued { color: #34d399; }
+.verdict-overvalued  { color: #f87171; }
+.verdict-fair        { color: #fbbf24; }
+
+/* AI explanation */
+.val-explanation {
+  line-height: 1.75; color: #cbd5e1; font-size: .92rem;
+  border-left: 3px solid #3b82f6;
+  padding-left: 1rem;
+}
+
+/* Sensitivity narrative items */
+.val-sensitivity-item {
+  background: #0a1120; border: 1px solid #1e2d3d;
+  border-radius: 8px; padding: .7rem 1rem;
+  margin-bottom: .5rem; font-size: .82rem;
+}
+.val-sensitivity-item .arrow-down { color: #f87171; }
+.val-sensitivity-item .arrow-up   { color: #34d399; }
+
+/* Scenarios */
+.scenario-meta {
+  display: flex; gap: 1rem; flex-wrap: wrap;
+}
+.scenario-pill {
+  padding: .3rem .8rem; border-radius: 20px;
+  font-size: .78rem; font-weight: 600;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.pill-bear { background: rgba(239,68,68,.15);  color: #f87171; }
+.pill-base { background: rgba(59,130,246,.15); color: #60a5fa; }
+.pill-bull { background: rgba(34,197,94,.15);  color: #4ade80; }
+
+/* Reverse DCF panel */
+.val-rdcf-row {
+  display: flex; justify-content: space-between;
+  padding: .4rem 0; border-bottom: 1px solid #1e2d3d;
+  font-size: .88rem;
+}
+.val-rdcf-row:last-child { border-bottom: none; }
+.val-rdcf-label { color: #8892a4; }
+.val-rdcf-value { font-family: 'IBM Plex Mono', monospace; font-weight: 600; }
+
+/* WACC Table */
+.val-table {
+  color: #e2e8f0;
+  font-size: .82rem;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.val-table th, .val-table td {
+  padding: .55rem .9rem;
+  text-align: center;
+  border-color: #1e2d3d;
+}
+.val-table thead th { background: #0a1120; color: #8892a4; font-size: .7rem; letter-spacing: .07em; text-transform: uppercase; }
+.val-table .wacc-base { background: rgba(59,130,246,.12); color: #60a5fa; font-weight: 700; }
+.val-table .wacc-good { color: #34d399; }
+.val-table .wacc-bad  { color: #f87171; }
+
+/* Assumption fields */
+.val-assump-label { font-size: .7rem; color: #8892a4; text-transform: uppercase; letter-spacing: .07em; }
+
+/* Accordion */
+.val-accordion .accordion-item {
+  background: #0e1523; border: 1px solid #1e2d3d; border-radius: 8px !important;
+}
+.val-accordion .accordion-button {
+  background: #0e1523; color: #e2e8f0;
+}
+.val-accordion .accordion-button:not(.collapsed) {
+  background: #1a2035; color: #60a5fa; box-shadow: none;
+}
+.val-accordion .accordion-button::after {
+  filter: invert(1) brightness(.7);
+}
+
+/* Chart canvas */
+canvas { max-width: 100%; }
+
+/* Warnings strip */
+.val-warning {
+  background: rgba(251,191,36,.08);
+  border-left: 3px solid #fbbf24;
+  color: #fde68a;
+  border-radius: 6px;
+  padding: .5rem .9rem;
+  font-size: .82rem;
+  margin-top: .5rem;
+}
