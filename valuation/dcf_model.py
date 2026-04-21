@@ -80,12 +80,12 @@ def _declining_growth(base: float, year: int, terminal: float, n: int) -> float:
     return base * (1 - t) + terminal * t
 
 
-def run_dcf(inp: ValuationInput) -> DCFResult:
+def _run_dcf_core(inp: ValuationInput) -> DCFResult:
+    """Core DCF calculation WITHOUT computing driver weights (avoids recursion)."""
     warnings = []
 
     if inp.wacc <= inp.terminal_growth_rate:
         warnings.append("WACC must exceed terminal growth rate. Adjusting.")
-        object.__setattr__(inp, "terminal_growth_rate", inp.wacc - 0.005) if hasattr(inp, '__setattr__') else None
         inp = ValuationInput(**{**inp.__dict__, "terminal_growth_rate": inp.wacc - 0.005})
 
     owner_earnings = compute_owner_earnings(inp)
@@ -130,8 +130,6 @@ def run_dcf(inp: ValuationInput) -> DCFResult:
     label = ("Undervalued" if mos > 0.15 else
              "Fairly Valued" if mos > -0.15 else "Overvalued")
 
-    driver_weights = _compute_driver_weights(inp, iv_per_share)
-
     return DCFResult(
         inputs=inp, owner_earnings=round(owner_earnings,4),
         projections=projections, pv_fcfs=round(pv_fcfs,4),
@@ -139,7 +137,22 @@ def run_dcf(inp: ValuationInput) -> DCFResult:
         enterprise_value=round(enterprise_value,4), equity_value=round(equity_value,4),
         intrinsic_value_per_share=round(iv_per_share,4),
         margin_of_safety=round(mos,4), valuation_label=label,
-        driver_weights=driver_weights, warnings=warnings,
+        driver_weights={}, warnings=warnings,
+    )
+
+
+def run_dcf(inp: ValuationInput) -> DCFResult:
+    """Full DCF with driver weight analysis."""
+    result = _run_dcf_core(inp)
+    driver_weights = _compute_driver_weights(inp, result.intrinsic_value_per_share)
+    return DCFResult(
+        inputs=result.inputs, owner_earnings=result.owner_earnings,
+        projections=result.projections, pv_fcfs=result.pv_fcfs,
+        terminal_value=result.terminal_value, pv_terminal_value=result.pv_terminal_value,
+        enterprise_value=result.enterprise_value, equity_value=result.equity_value,
+        intrinsic_value_per_share=result.intrinsic_value_per_share,
+        margin_of_safety=result.margin_of_safety, valuation_label=result.valuation_label,
+        driver_weights=driver_weights, warnings=result.warnings,
     )
 
 
@@ -159,7 +172,7 @@ def _compute_driver_weights(inp: ValuationInput, base_iv: float) -> dict:
         d2 = {**inp.__dict__, param: getattr(inp, param) + delta}
         d2.pop("base_fcf_override", None)
         try:
-            r2 = run_dcf(ValuationInput(**d2))
+            r2 = _run_dcf_core(ValuationInput(**d2))
             sensitivities[param] = abs(r2.intrinsic_value_per_share - base_iv)
         except Exception:
             sensitivities[param] = 0.0

@@ -6,6 +6,13 @@
 
 <div class="container-fluid px-4 py-4">
 
+  <!-- Breadcrumb -->
+  <nav class="val-breadcrumb mb-3">
+    <a href="/dashboard"><i class="fas fa-arrow-left me-1"></i> Dashboard</a>
+    <span class="mx-2 text-muted">/</span>
+    <span class="text-muted">Company Valuation</span>
+  </nav>
+
   <div class="d-flex align-items-center gap-3 mb-4">
     <div class="val-icon"><i class="fas fa-chart-line"></i></div>
     <div>
@@ -14,35 +21,128 @@
     </div>
   </div>
 
-  <!-- Search -->
+  <!-- Search / Manual Toggle -->
   <div class="card mb-4">
     <div class="card-body">
-      <div class="row g-3 align-items-end">
-        <div class="col-md-5">
-          <label class="form-label text-muted small">Company / Symbol</label>
-          <div class="position-relative">
-            <input id="symbolInput" type="text" class="form-control val-input"
-                   placeholder="e.g. TCS, INFY, RELIANCE…" autocomplete="off">
-            <ul id="autocompleteList" class="val-autocomplete d-none"></ul>
+      <!-- Mode tabs -->
+      <div class="val-mode-tabs mb-3">
+        <button id="modeSearch" class="val-mode-tab active" onclick="switchMode('search')">
+          <i class="fas fa-search me-1"></i> Search Company
+        </button>
+        <button id="modeManual" class="val-mode-tab" onclick="switchMode('manual')">
+          <i class="fas fa-keyboard me-1"></i> Manual Input
+        </button>
+      </div>
+
+      <!-- Search mode -->
+      <div id="searchMode">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-5">
+            <label class="form-label text-muted small">Company / Symbol</label>
+            <div class="position-relative">
+              <input id="symbolInput" type="text" class="form-control val-input"
+                     placeholder="e.g. TCS, INFY, RELIANCE…" autocomplete="off">
+              <ul id="autocompleteList" class="val-autocomplete d-none"></ul>
+            </div>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label text-muted small">Exchange</label>
+            <select id="exchangeSelect" class="form-select val-input">
+              <option value="NSE" selected>NSE</option>
+              <option value="BSE">BSE</option>
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label text-muted small">WACC (%)</label>
+            <input id="waccInput" type="number" step="0.1" value="10" class="form-control val-input" min="1" max="40">
+          </div>
+          <div class="col-md-2 d-grid">
+            <button id="analyseBtn" class="btn btn-primary val-btn" onclick="runFullAnalysis()">
+              <i class="fas fa-bolt me-1"></i> Analyse
+            </button>
           </div>
         </div>
-        <div class="col-md-2">
-          <label class="form-label text-muted small">Exchange</label>
-          <select id="exchangeSelect" class="form-select val-input">
-            <option value="NSE" selected>NSE</option>
-            <option value="BSE">BSE</option>
-          </select>
+      </div>
+
+      <!-- Manual input mode -->
+      <div id="manualMode" class="d-none">
+        <div class="row g-3 align-items-end">
+          <div class="col-md-4">
+            <label class="form-label text-muted small">Company Name</label>
+            <input id="manualCompanyName" type="text" class="form-control val-input" placeholder="e.g. My Company" value="Custom Company">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label text-muted small">Current Price (₹)</label>
+            <input id="manualPrice" type="number" step="1" class="form-control val-input" placeholder="0" value="0">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label text-muted small">Shares (Mn)</label>
+            <input id="manualShares" type="number" step="0.1" class="form-control val-input" placeholder="1" value="1">
+          </div>
+          <div class="col-md-2">
+            <label class="form-label text-muted small">WACC (%)</label>
+            <input id="manualWacc" type="number" step="0.1" value="10" class="form-control val-input" min="1" max="40">
+          </div>
+          <div class="col-md-2 d-grid">
+            <button id="manualAnalyseBtn" class="btn btn-primary val-btn" onclick="runManualAnalysis()">
+              <i class="fas fa-bolt me-1"></i> Analyse
+            </button>
+          </div>
         </div>
-        <div class="col-md-3">
-          <label class="form-label text-muted small">WACC (%)</label>
-          <input id="waccInput" type="number" step="0.1" value="10" class="form-control val-input" min="1" max="40">
+        <div class="row g-3 mt-2">
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Net Income (₹ Cr)</label>
+            <input id="manualNetIncome" type="number" step="1" class="form-control form-control-sm val-input" value="5000">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Depreciation (₹ Cr)</label>
+            <input id="manualDepr" type="number" step="1" class="form-control form-control-sm val-input" value="1000">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Amortization (₹ Cr)</label>
+            <input id="manualAmort" type="number" step="1" class="form-control form-control-sm val-input" value="100">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Capex (₹ Cr)</label>
+            <input id="manualCapex" type="number" step="1" class="form-control form-control-sm val-input" value="2000">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">WC Change (₹ Cr)</label>
+            <input id="manualWCChange" type="number" step="1" class="form-control form-control-sm val-input" value="500">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Net Debt (₹ Cr)</label>
+            <input id="manualNetDebt" type="number" step="1" class="form-control form-control-sm val-input" value="0">
+          </div>
         </div>
-        <div class="col-md-2 d-grid">
-          <button id="analyseBtn" class="btn btn-primary val-btn" onclick="runFullAnalysis()">
-            <i class="fas fa-bolt me-1"></i> Analyse
-          </button>
+        <div class="row g-3 mt-1">
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Revenue Growth (%)</label>
+            <input id="manualGrowth" type="number" step="0.1" class="form-control form-control-sm val-input" value="10">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Operating Margin (%)</label>
+            <input id="manualMargin" type="number" step="0.1" class="form-control form-control-sm val-input" value="15">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Tax Rate (%)</label>
+            <input id="manualTax" type="number" step="0.1" class="form-control form-control-sm val-input" value="25">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Reinvestment (%)</label>
+            <input id="manualReinvest" type="number" step="0.1" class="form-control form-control-sm val-input" value="30">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Terminal Growth (%)</label>
+            <input id="manualTerminal" type="number" step="0.1" class="form-control form-control-sm val-input" value="5">
+          </div>
+          <div class="col-6 col-md-2">
+            <label class="form-label val-assump-label">Forecast Years</label>
+            <input id="manualYears" type="number" step="1" class="form-control form-control-sm val-input" value="10" min="1" max="30">
+          </div>
         </div>
       </div>
+
       <div id="companyBar" class="val-company-bar d-none mt-3">
         <span id="companyName" class="fw-bold"></span>
         <span class="badge val-badge-sector ms-2" id="companySector"></span>

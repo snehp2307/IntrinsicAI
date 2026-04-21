@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -30,6 +31,9 @@
     <span class="nav-badge" id="navTotal">— companies</span>
     <a href="/" class="nav-link active">Dashboard</a>
     <a href="/predict" class="nav-link">Predict</a>
+    <a href="/valuation/dashboard" class="val-nav-btn">
+      <i class="fas fa-chart-line"></i> Valuation
+    </a>
   </div>
 </nav>
 
@@ -45,6 +49,20 @@
     <div class="hstat skeleton"><div class="hstat-val">—</div><div class="hstat-lbl">High Risk</div></div>
     <div class="hstat skeleton"><div class="hstat-val">—</div><div class="hstat-lbl">Anomalies Detected</div></div>
     <div class="hstat skeleton"><div class="hstat-val">—</div><div class="hstat-lbl">Avg Risk Score</div></div>
+  </div>
+</div>
+
+<!-- VALUATION QUICK ACCESS -->
+<div class="val-access-strip">
+  <div class="val-access-content">
+    <div class="val-access-left">
+      <div class="val-access-icon"><i class="fas fa-chart-line"></i></div>
+      <div>
+        <h3 class="val-access-title">Intrinsic Value Analyser</h3>
+        <p class="val-access-desc">Run DCF valuations with AI-driven explanations — Buffett Owner Earnings, Reverse DCF, Scenario Analysis</p>
+      </div>
+    </div>
+    <a href="/valuation/dashboard" class="val-access-btn">Open Valuation Module <i class="fas fa-arrow-right"></i></a>
   </div>
 </div>
 

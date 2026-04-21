@@ -50,7 +50,7 @@ def sensitivity_narrative(result: "DCFResult") -> list[dict]:
     For each key driver, describe the impact of a +1% change on IV.
     Returns list of narrative strings.
     """
-    from .dcf_model import ValuationInput, run_dcf
+    from .dcf_model import ValuationInput, _run_dcf_core
 
     base_iv = result.intrinsic_value_per_share
     inp = result.inputs
@@ -67,7 +67,7 @@ def sensitivity_narrative(result: "DCFResult") -> list[dict]:
         try:
             d2 = {**inp.__dict__, param: getattr(inp, param) + delta}
             d2.pop("base_fcf_override", None)
-            new_iv = run_dcf(ValuationInput(**d2)).intrinsic_value_per_share
+            new_iv = _run_dcf_core(ValuationInput(**d2)).intrinsic_value_per_share
             change = new_iv - base_iv
             direction = "drops" if change < 0 else "rises"
             label = _DRIVER_LABELS.get(param, param)
@@ -148,7 +148,7 @@ def wacc_sensitivity_table(result: "DCFResult",
     wacc_range: ± range around base WACC (default ±4%)
     steps     : number of steps (default 9 → -4% to +4% in 1% increments)
     """
-    from .dcf_model import ValuationInput, run_dcf
+    from .dcf_model import ValuationInput, _run_dcf_core
 
     inp      = result.inputs
     base_iv  = result.intrinsic_value_per_share
@@ -163,7 +163,7 @@ def wacc_sensitivity_table(result: "DCFResult",
         try:
             d2 = {**inp.__dict__, "wacc": w}
             d2.pop("base_fcf_override", None)
-            iv = run_dcf(ValuationInput(**d2)).intrinsic_value_per_share
+            iv = _run_dcf_core(ValuationInput(**d2)).intrinsic_value_per_share
         except Exception:
             iv = 0.0
         table.append({

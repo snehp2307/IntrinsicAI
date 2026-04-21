@@ -11,8 +11,23 @@ Routes:
   /result/<id>          Full analysis — XAI + all valuation models
   /history              Prediction history
 """
-import os, json, pickle, functools
+import os, json, pickle, functools, logging
 from datetime import datetime, timedelta
+
+# ── Load .env before anything reads os.environ ────────────────────────────────
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass  # python-dotenv not installed; env vars must be set externally
+
+# ── Configure logging ─────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=getattr(logging, os.environ.get("LOG_LEVEL", "INFO").upper(), logging.INFO),
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+
 from flask import (Flask, render_template, request, jsonify,
                    redirect, url_for, session, flash, abort)
 import numpy as np

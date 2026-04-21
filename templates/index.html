@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 <style>
   .landing-hero{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:80vh;text-align:center;padding:4rem 2rem;}
   .landing-hero h1{font-size:3rem;font-weight:700;margin-bottom:1rem;line-height:1.2;}
@@ -16,8 +17,13 @@
   .btn-primary:hover{background:#2563eb;}
   .btn-secondary{padding:.85rem 2rem;background:transparent;color:#8892a4;border:1px solid #2d3748;border-radius:6px;font-family:inherit;font-size:1rem;cursor:pointer;text-decoration:none;}
   .btn-secondary:hover{border-color:#3b82f6;color:#e2e8f0;}
+  .btn-valuation{padding:.85rem 2rem;background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:1rem;font-weight:600;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:.5rem;transition:opacity .2s,transform .15s;}
+  .btn-valuation:hover{opacity:.88;transform:translateY(-2px);color:#fff;text-decoration:none;}
   .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.5rem;padding:2rem 4rem 4rem;max-width:1100px;margin:0 auto;}
-  .feat-card{background:#0e1523;border:1px solid #1a2035;border-radius:10px;padding:1.5rem;}
+  .feat-card{background:#0e1523;border:1px solid #1a2035;border-radius:10px;padding:1.5rem;transition:border-color .2s,transform .2s;}
+  .feat-card:hover{border-color:#3b82f644;transform:translateY(-3px);}
+  .feat-card a.feat-link{display:inline-block;margin-top:.75rem;font-family:'IBM Plex Mono',monospace;font-size:.8rem;color:#6366f1;border:1px solid #6366f133;padding:.3rem .8rem;border-radius:4px;transition:background .2s;}
+  .feat-card a.feat-link:hover{background:#6366f122;text-decoration:none;}
   .feat-icon{font-size:1.8rem;margin-bottom:.75rem;}
   .feat-title{font-weight:600;margin-bottom:.5rem;}
   .feat-desc{color:#8892a4;font-size:.9rem;line-height:1.6;}
@@ -25,6 +31,8 @@
   .status-pill{font-family:'IBM Plex Mono',monospace;font-size:.75rem;padding:.3rem .8rem;border-radius:20px;border:1px solid;}
   .status-ok{color:#22c55e;border-color:#22c55e33;background:#22c55e11;}
   .status-warn{color:#f59e0b;border-color:#f59e0b33;background:#f59e0b11;}
+  .val-nav-btn{background:linear-gradient(135deg,#3b82f6,#6366f1);color:#fff;padding:.32rem .85rem;border-radius:20px;font-weight:600;font-size:.82rem;letter-spacing:.03em;display:inline-flex;align-items:center;gap:.35rem;transition:opacity .2s;}
+  .val-nav-btn:hover{opacity:.82;color:#fff;text-decoration:none;}
 </style>
 </head>
 <body>
@@ -44,6 +52,9 @@
       <a href="/login" class="nav-link">Login</a>
       <a href="/register" class="nav-link">Register</a>
     {% endif %}
+    <a href="/valuation/dashboard" class="val-nav-btn">
+      <i class="fas fa-chart-line"></i> Valuation
+    </a>
   </div>
 </nav>
 
@@ -64,6 +75,9 @@
 
   <div class="cta-row">
     <a href="/dashboard" class="btn-primary">View Dashboard →</a>
+    <a href="/valuation/dashboard" class="btn-valuation">
+      <i class="fas fa-chart-line"></i> Company Valuation
+    </a>
     {% if current_user() %}
     <a href="/predict" class="btn-secondary">Run Prediction</a>
     {% else %}
@@ -92,6 +106,7 @@
     <div class="feat-icon">⚖️</div>
     <div class="feat-title">10 Valuation Models</div>
     <div class="feat-desc">Altman Z, Ohlson O-Score, Piotroski F-Score, DCF, DuPont, Merton DD and more.</div>
+    <a href="/valuation/dashboard" class="feat-link">Open Valuation →</a>
   </div>
   <div class="feat-card">
     <div class="feat-icon">🗂️</div>

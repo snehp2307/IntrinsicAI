@@ -1,38 +1,14 @@
 """
 data_loader.py
 ==============
-Loads company financial data from a local JSON/CSV dataset.
+Loads company financial data from local datasets.
 
-Expected dataset location: data/valuation_data.json
-Schema per company:
-{
-  "TCS": {
-    "company_name": "Tata Consultancy Services",
-    "symbol": "TCS",
-    "exchange": "NSE",
-    "token": "11536",
-    "sector": "IT",
-    "industry": "Software",
-    "shares_outstanding": 364.0,   <- millions
-    "financials": [                <- 10 years, newest first
-      {
-        "year": 2024,
-        "revenue": 240893,         <- ₹ Crores
-        "net_income": 46099,
-        "ebit": 57200,
-        "free_cash_flow": 40200,
-        "depreciation": 9800,
-        "amortization": 800,
-        "capex": 5200,
-        "working_capital": 42000,
-        "working_capital_prev": 38000,
-        "debt": 0,
-        "cash": 9547
-      },
-      ...
-    ]
-  }
-}
+Two data sources:
+  1. data/nifty500_companies.json — 300+ companies for search/autocomplete
+  2. Built-in sample financials — 5 companies with detailed DCF data
+
+When a company is found in the directory but has no financials,
+the route will still work using yfinance prices + default DCF assumptions.
 """
 from __future__ import annotations
 
@@ -44,11 +20,34 @@ from typing import Optional
 
 log = logging.getLogger(__name__)
 
-_DATA_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "valuation_data.json")
+_DATA_PATH       = os.path.join(os.path.dirname(__file__), "..", "data", "valuation_data.json")
+_NIFTY500_PATH   = os.path.join(os.path.dirname(__file__), "..", "data", "nifty500_companies.json")
 _CACHE: Optional[dict] = None
+_DIRECTORY_CACHE: Optional[list] = None
 
 
-# ── Dataset loading ───────────────────────────────────────────────────────────
+# ── Company Directory (300+ companies for search) ─────────────────────────────
+
+def _load_directory() -> list:
+    """Load the NIFTY 500 company directory for search/autocomplete."""
+    global _DIRECTORY_CACHE
+    if _DIRECTORY_CACHE is not None:
+        return _DIRECTORY_CACHE
+
+    if os.path.exists(_NIFTY500_PATH):
+        try:
+            with open(_NIFTY500_PATH, "r", encoding="utf-8") as f:
+                _DIRECTORY_CACHE = json.load(f)
+            log.info("Loaded company directory: %d companies", len(_DIRECTORY_CACHE))
+            return _DIRECTORY_CACHE
+        except Exception as e:
+            log.error("Failed to load company directory: %s", e)
+
+    _DIRECTORY_CACHE = []
+    return _DIRECTORY_CACHE
+
+
+# ── Financial Dataset (detailed DCF data) ─────────────────────────────────────
 
 def _load_dataset() -> dict:
     global _CACHE
@@ -69,24 +68,54 @@ def _load_dataset() -> dict:
 
 def reload_dataset():
     """Force reload from disk (useful after updates)."""
-    global _CACHE
+    global _CACHE, _DIRECTORY_CACHE
     _CACHE = None
+    _DIRECTORY_CACHE = None
     return _load_dataset()
 
 
-# ── Company search ────────────────────────────────────────────────────────────
+# ── Company search (uses directory + financials) ─────────────────────────────
 
-def search_companies(query: str, limit: int = 10) -> list[dict]:
+def search_companies(query: str, limit: int = 12) -> list[dict]:
     """
     Search by symbol or company name (case-insensitive substring match).
+    Searches the NIFTY 500 directory first, then the financials dataset.
     Returns list of {symbol, company_name, sector, industry, exchange}.
     """
-    dataset = _load_dataset()
     q = query.strip().upper()
+    if not q:
+        return []
+
     results = []
+    seen = set()
+
+    # Search NIFTY 500 directory first (300+ companies)
+    directory = _load_directory()
+    for entry in directory:
+        sym  = entry.get("symbol", "").upper()
+        name = entry.get("company_name", "").upper()
+        if q in sym or q in name:
+            if sym not in seen:
+                seen.add(sym)
+                results.append({
+                    "symbol":       sym,
+                    "company_name": entry.get("company_name", sym),
+                    "sector":       entry.get("sector", ""),
+                    "industry":     entry.get("industry", ""),
+                    "exchange":     entry.get("exchange", "NSE"),
+                    "token":        entry.get("token", ""),
+                })
+            if len(results) >= limit:
+                return results
+
+    # Also search the financials dataset (may have entries not in directory)
+    dataset = _load_dataset()
     for sym, data in dataset.items():
+        if sym in seen:
+            continue
         name = data.get("company_name", "").upper()
         if q in sym or q in name:
+            seen.add(sym)
             results.append({
                 "symbol":       sym,
                 "company_name": data.get("company_name", sym),
@@ -95,8 +124,9 @@ def search_companies(query: str, limit: int = 10) -> list[dict]:
                 "exchange":     data.get("exchange", "NSE"),
                 "token":        data.get("token", ""),
             })
-        if len(results) >= limit:
-            break
+            if len(results) >= limit:
+                break
+
     return results
 
 

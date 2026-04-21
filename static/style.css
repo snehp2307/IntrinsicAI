@@ -525,6 +525,92 @@ a:hover { text-decoration: underline; }
 }
 .footer-sep { opacity: .3; }
 
+/* ── Valuation nav button (standalone pages) ──────────────────────── */
+.val-nav-btn {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  padding: .32rem .85rem;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: .82rem;
+  letter-spacing: .03em;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  transition: opacity .2s;
+}
+.val-nav-btn:hover { opacity: .82; color: #fff; text-decoration: none; }
+
+/* ── Valuation access strip (dashboard) ───────────────────────────── */
+.val-access-strip {
+  padding: 0 2.5rem;
+  margin-top: -1px;
+}
+.val-access-content {
+  background: linear-gradient(135deg, #0e1a2e 0%, #131d35 50%, #111a30 100%);
+  border: 1px solid #1e2d3d;
+  border-radius: 10px;
+  padding: 1.2rem 1.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  transition: border-color .2s;
+}
+.val-access-content:hover { border-color: #3b82f666; }
+.val-access-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.val-access-icon {
+  width: 44px; height: 44px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.val-access-title {
+  font-size: 1rem; font-weight: 700;
+  color: var(--text);
+  margin-bottom: .15rem;
+}
+.val-access-desc {
+  font-size: .8rem;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  line-height: 1.5;
+}
+.val-access-btn {
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  color: #fff;
+  padding: .6rem 1.4rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: .88rem;
+  letter-spacing: .02em;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  transition: opacity .2s, transform .15s;
+  text-decoration: none;
+}
+.val-access-btn:hover {
+  opacity: .88;
+  transform: translateY(-2px);
+  color: #fff;
+  text-decoration: none;
+}
+
+@media (max-width: 700px) {
+  .val-access-strip { padding: 0 1rem; }
+  .val-access-content { flex-direction: column; text-align: center; }
+  .val-access-left { flex-direction: column; }
+}
+
 /* ── Responsive ────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .two-col   { grid-template-columns: 1fr; }

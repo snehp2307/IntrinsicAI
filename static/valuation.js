@@ -208,7 +208,7 @@ function renderKPIs(dcf) {
 function renderFCFChart(dcf) {
   const proj = dcf.projections || [];
   destroyChart("fcfChart");
-  _charts.fcf = new Chart(document.getElementById("fcfChart"), {
+  _charts.fcfChart = new Chart(document.getElementById("fcfChart"), {
     type: "bar",
     data: {
       labels: proj.map(p => `Y${p.year}`),
@@ -240,7 +240,7 @@ function renderHistoryChart(mkt) {
   const hist = (mkt?.history || []).slice().reverse();
   if (!hist.length) return;
   destroyChart("historyChart");
-  _charts.history = new Chart(document.getElementById("historyChart"), {
+  _charts.historyChart = new Chart(document.getElementById("historyChart"), {
     type: "line",
     data: {
       labels: hist.map(h => h.year),
@@ -268,7 +268,7 @@ function renderDriversChart(dcf) {
   const drvs = dcf.xai?.driver_summary || [];
   if (!drvs.length) return;
   destroyChart("driversChart");
-  _charts.drivers = new Chart(document.getElementById("driversChart"), {
+  _charts.driversChart = new Chart(document.getElementById("driversChart"), {
     type: "doughnut",
     data: {
       labels: drvs.map(d => `${d.driver} (${d.value}%)`),
@@ -321,7 +321,7 @@ function renderScenarios(sc) {
   const price  = sc.current_price || 0;
 
   destroyChart("scenarioChart");
-  _charts.scenario = new Chart(document.getElementById("scenarioChart"), {
+  _charts.scenarioChart = new Chart(document.getElementById("scenarioChart"), {
     type: "bar",
     data: {
       labels,
@@ -385,7 +385,7 @@ function renderReverseDCF(rd) {
   const tbl = rd.sensitivity_table || [];
   if (!tbl.length) return;
   destroyChart("reverseChart");
-  _charts.reverse = new Chart(document.getElementById("reverseChart"), {
+  _charts.reverseChart = new Chart(document.getElementById("reverseChart"), {
     type: "line",
     data: {
       labels: tbl.map(r => r.growth_rate + "%"),
@@ -521,4 +521,113 @@ function showError(msg) {
 
 function hideError() {
   document.getElementById("errorAlert").classList.add("d-none");
+}
+
+// ── Mode switching (Search / Manual) ──────────────────────────────────────────
+function switchMode(mode) {
+  const searchMode  = document.getElementById("searchMode");
+  const manualMode  = document.getElementById("manualMode");
+  const tabSearch   = document.getElementById("modeSearch");
+  const tabManual   = document.getElementById("modeManual");
+
+  if (mode === "manual") {
+    searchMode.classList.add("d-none");
+    manualMode.classList.remove("d-none");
+    tabSearch.classList.remove("active");
+    tabManual.classList.add("active");
+  } else {
+    searchMode.classList.remove("d-none");
+    manualMode.classList.add("d-none");
+    tabSearch.classList.add("active");
+    tabManual.classList.remove("active");
+  }
+  // Hide previous results & errors
+  hideError();
+  document.getElementById("resultsSection").classList.add("d-none");
+  document.getElementById("companyBar").classList.add("d-none");
+}
+
+// ── Manual analysis runner ────────────────────────────────────────────────────
+async function runManualAnalysis() {
+  const fv = (id, def = 0) => {
+    const el = document.getElementById(id);
+    const v = parseFloat(el ? el.value : def);
+    return isNaN(v) ? def : v;
+  };
+
+  const companyName = (document.getElementById("manualCompanyName")?.value || "Custom Company").trim();
+  if (!companyName) { showError("Please enter a company name."); return; }
+
+  const netIncome  = fv("manualNetIncome", 5000);
+  const depr       = fv("manualDepr", 1000);
+  const amort      = fv("manualAmort", 100);
+  const capex      = fv("manualCapex", 2000);
+  const wcChange   = fv("manualWCChange", 500);
+  const netDebt    = fv("manualNetDebt", 0);
+  const price      = fv("manualPrice", 0);
+  const shares     = fv("manualShares", 1);
+  const wacc       = fv("manualWacc", 10) / 100;
+  const growth     = fv("manualGrowth", 10) / 100;
+  const margin     = fv("manualMargin", 15) / 100;
+  const taxRate    = fv("manualTax", 25) / 100;
+  const reinvest   = fv("manualReinvest", 30) / 100;
+  const terminal   = fv("manualTerminal", 5) / 100;
+  const years      = Math.max(1, Math.min(30, Math.round(fv("manualYears", 10))));
+
+  if (shares <= 0) { showError("Shares outstanding must be greater than zero."); return; }
+  if (wacc <= 0 || wacc > 1) { showError("WACC must be between 0.1% and 100%."); return; }
+  if (wacc <= terminal) { showError("WACC must be greater than terminal growth rate."); return; }
+
+  showLoading(true);
+  hideError();
+  document.getElementById("resultsSection").classList.add("d-none");
+
+  const payload = {
+    symbol:                "",
+    net_income:            netIncome,
+    depreciation:          depr,
+    amortization:          amort,
+    capex:                 capex,
+    working_capital_change: wcChange,
+    net_debt:              netDebt,
+    current_price:         price,
+    shares_outstanding:    shares,
+    wacc:                  wacc,
+    revenue_growth_rate:   growth,
+    operating_margin:      margin,
+    tax_rate:              taxRate,
+    reinvestment_rate:     reinvest,
+    terminal_growth_rate:  terminal,
+    forecast_years:        years,
+  };
+
+  // Show company bar with manual data
+  _marketData = {
+    company_name: companyName,
+    symbol: "MANUAL",
+    sector: "Manual Input",
+    ltp: price,
+    price_source: "User Input",
+    shares_outstanding: shares,
+    history: [],
+  };
+  updateCompanyBar(_marketData);
+
+  try {
+    const [dcfResp, scResp, rdResp] = await Promise.all([
+      postJSON("/valuation/run_dcf",          payload),
+      postJSON("/valuation/scenario_analysis", payload),
+      postJSON("/valuation/reverse_dcf",       payload),
+    ]);
+
+    if (dcfResp.status !== "ok") { showError(dcfResp.message || "DCF valuation failed."); return; }
+
+    _dcfResult = dcfResp;
+    renderResults(dcfResp, scResp, rdResp);
+    populateAssumptions(payload);
+  } catch (err) {
+    showError("Network error: " + err.message);
+  } finally {
+    showLoading(false);
+  }
 }

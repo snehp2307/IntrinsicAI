@@ -4,14 +4,14 @@ reverse_dcf.py
 Solve for the growth rate implied by the current market price.
 Uses bisection search over [-30%, +150%] growth space.
 """
-from .dcf_model import ValuationInput, run_dcf
+from .dcf_model import ValuationInput, _run_dcf_core
 
 
 def _iv_at_growth(inp: ValuationInput, g: float) -> float:
     d = {**inp.__dict__, "revenue_growth_rate": g}
     d.pop("base_fcf_override", None)
     try:
-        return run_dcf(ValuationInput(**d)).intrinsic_value_per_share
+        return _run_dcf_core(ValuationInput(**d)).intrinsic_value_per_share
     except Exception:
         return 0.0
 
@@ -22,16 +22,17 @@ def implied_growth_rate(inp: ValuationInput, price: float = None) -> dict:
         return {"error": "Price must be positive."}
 
     lo, hi = -0.30, 1.50
-    for _ in range(120):
+    f_lo = _iv_at_growth(inp, lo) - target
+    for _ in range(60):
         mid   = (lo + hi) / 2
         f_mid = _iv_at_growth(inp, mid) - target
         if abs(f_mid) < 0.5 or (hi - lo) < 1e-6:
             break
-        f_lo = _iv_at_growth(inp, lo) - target
         if f_lo * f_mid < 0:
             hi = mid
         else:
             lo = mid
+            f_lo = f_mid
 
     implied_g = (lo + hi) / 2
     user_g    = inp.revenue_growth_rate

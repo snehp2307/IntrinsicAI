@@ -13,10 +13,14 @@ Endpoints:
 """
 from __future__ import annotations
 
+import logging
+import time
 from flask import Blueprint, request, jsonify, render_template, session
 
+log = logging.getLogger(__name__)
+
 from .data_loader  import search_companies, get_financials
-from .angel_api    import get_market_data
+from .market_data  import get_market_data
 from .dcf_model    import ValuationInput, run_dcf, dcf_to_dict
 from .reverse_dcf  import implied_growth_rate
 from .scenario_analysis import run_scenarios
@@ -140,13 +144,16 @@ def run_dcf_route():
     inp = _build_input(merged, market_price)
 
     try:
+        t0 = time.time()
         result  = run_dcf(inp)
         payload = dcf_to_dict(result)
         payload["xai"] = full_xai_payload(result)
         if fin:
             payload["history"] = fin.get("history", [])
+        log.info("[run_dcf] %s completed in %.2fs", symbol or "manual", time.time() - t0)
         return jsonify({"status": "ok", **payload})
     except Exception as e:
+        log.error("[run_dcf] %s failed: %s", symbol or "manual", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -170,9 +177,12 @@ def reverse_dcf_route():
     inp = _build_input(merged, market_price)
 
     try:
+        t0 = time.time()
         result = implied_growth_rate(inp, price=market_price)
+        log.info("[reverse_dcf] %s completed in %.2fs", symbol or "manual", time.time() - t0)
         return jsonify({"status": "ok", **result})
     except Exception as e:
+        log.error("[reverse_dcf] %s failed: %s", symbol or "manual", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
@@ -196,7 +206,10 @@ def scenario_analysis_route():
     inp = _build_input(merged, market_price)
 
     try:
+        t0 = time.time()
         result = run_scenarios(inp)
+        log.info("[scenario_analysis] %s completed in %.2fs", symbol or "manual", time.time() - t0)
         return jsonify({"status": "ok", **result})
     except Exception as e:
+        log.error("[scenario_analysis] %s failed: %s", symbol or "manual", e)
         return jsonify({"status": "error", "message": str(e)}), 500

@@ -172,3 +172,45 @@ canvas { max-width: 100%; }
   font-size: .82rem;
   margin-top: .5rem;
 }
+
+/* Breadcrumb */
+.val-breadcrumb {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: .78rem;
+}
+.val-breadcrumb a {
+  color: #60a5fa;
+  text-decoration: none;
+  transition: color .2s;
+}
+.val-breadcrumb a:hover { color: #93c5fd; }
+
+/* Mode tabs */
+.val-mode-tabs {
+  display: flex;
+  gap: .5rem;
+  border-bottom: 1px solid #1e2d3d;
+  padding-bottom: .5rem;
+}
+.val-mode-tab {
+  background: transparent;
+  border: 1px solid #1e2d3d;
+  border-radius: 6px;
+  color: #8892a4;
+  font-size: .82rem;
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 500;
+  padding: .4rem 1rem;
+  cursor: pointer;
+  transition: all .2s;
+}
+.val-mode-tab:hover {
+  border-color: #3b82f6;
+  color: #e2e8f0;
+}
+.val-mode-tab.active {
+  background: rgba(59,130,246,.12);
+  border-color: #3b82f6;
+  color: #60a5fa;
+  font-weight: 600;
+}
