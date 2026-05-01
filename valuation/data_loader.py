@@ -78,35 +78,45 @@ def reload_dataset():
 
 def search_companies(query: str, limit: int = 12) -> list[dict]:
     """
-    Search by symbol or company name (case-insensitive substring match).
-    Searches the NIFTY 500 directory first, then the financials dataset.
+    Search by symbol or company name (case-insensitive).
+    Priority: exact symbol > symbol prefix > name prefix > substring match.
+    Searches the NIFTY 500 directory + financials dataset.
     Returns list of {symbol, company_name, sector, industry, exchange}.
     """
     q = query.strip().upper()
     if not q:
         return []
 
-    results = []
+    # Collect all candidates from both sources
+    candidates = []
     seen = set()
 
-    # Search NIFTY 500 directory first (300+ companies)
+    # Gather from NIFTY 500 directory (300+ companies)
     directory = _load_directory()
     for entry in directory:
         sym  = entry.get("symbol", "").upper()
         name = entry.get("company_name", "").upper()
+        if sym in seen:
+            continue
         if q in sym or q in name:
-            if sym not in seen:
-                seen.add(sym)
-                results.append({
-                    "symbol":       sym,
-                    "company_name": entry.get("company_name", sym),
-                    "sector":       entry.get("sector", ""),
-                    "industry":     entry.get("industry", ""),
-                    "exchange":     entry.get("exchange", "NSE"),
-                    "token":        entry.get("token", ""),
-                })
-            if len(results) >= limit:
-                return results
+            seen.add(sym)
+            # Score: exact sym=4, sym prefix=3, name prefix=2, substring=1
+            if sym == q:
+                score = 4
+            elif sym.startswith(q):
+                score = 3
+            elif name.startswith(q):
+                score = 2
+            else:
+                score = 1
+            candidates.append((score, {
+                "symbol":       sym,
+                "company_name": entry.get("company_name", sym),
+                "sector":       entry.get("sector", ""),
+                "industry":     entry.get("industry", ""),
+                "exchange":     entry.get("exchange", "NSE"),
+                "token":        entry.get("token", ""),
+            }))
 
     # Also search the financials dataset (may have entries not in directory)
     dataset = _load_dataset()
@@ -116,24 +126,42 @@ def search_companies(query: str, limit: int = 12) -> list[dict]:
         name = data.get("company_name", "").upper()
         if q in sym or q in name:
             seen.add(sym)
-            results.append({
+            if sym == q:
+                score = 4
+            elif sym.startswith(q):
+                score = 3
+            elif name.startswith(q):
+                score = 2
+            else:
+                score = 1
+            candidates.append((score, {
                 "symbol":       sym,
                 "company_name": data.get("company_name", sym),
                 "sector":       data.get("sector", ""),
                 "industry":     data.get("industry", ""),
                 "exchange":     data.get("exchange", "NSE"),
                 "token":        data.get("token", ""),
-            })
-            if len(results) >= limit:
-                break
+            }))
 
-    return results
+    # Sort by priority score (descending), then alphabetically
+    candidates.sort(key=lambda x: (-x[0], x[1]["symbol"]))
+    return [c[1] for c in candidates[:limit]]
 
 
 def get_company_info(symbol: str) -> Optional[dict]:
-    """Return full company entry or None."""
+    """Return full company entry from financials dataset, or None."""
     dataset = _load_dataset()
     return dataset.get(symbol.upper())
+
+
+def get_directory_entry(symbol: str) -> Optional[dict]:
+    """Return a company's directory entry (NIFTY 500 list) by symbol."""
+    directory = _load_directory()
+    sym = symbol.upper().strip()
+    for entry in directory:
+        if entry.get("symbol", "").upper() == sym:
+            return entry
+    return None
 
 
 # ── Financial aggregation ─────────────────────────────────────────────────────
@@ -141,16 +169,34 @@ def get_company_info(symbol: str) -> Optional[dict]:
 def get_financials(symbol: str) -> Optional[dict]:
     """
     Return processed financial inputs suitable for DCF.
-    Averages the most recent 3–5 years for stability.
+
+    Data resolution order:
+      1. Detailed financials dataset (5 companies with multi-year history)
+      2. NIFTY 500 directory stub (300+ companies — uses defaults + yfinance)
+
+    For companies in the directory but without detailed financials,
+    returns a minimal stub with sensible DCF defaults so the pipeline
+    can run using live yfinance market prices.
     """
+    # ── Attempt 1: detailed financials dataset ────────────────────────────────
     data = get_company_info(symbol)
-    if not data:
-        return None
+    if data:
+        fin = data.get("financials", [])
+        if fin:
+            return _build_financials_from_dataset(symbol, data, fin)
 
-    fin = data.get("financials", [])
-    if not fin:
-        return None
+    # ── Attempt 2: NIFTY 500 directory stub ──────────────────────────────────
+    dir_entry = get_directory_entry(symbol)
+    if dir_entry:
+        log.info("Using directory stub for %s (no detailed financials)", symbol)
+        return _build_stub_financials(symbol, dir_entry)
 
+    # Not found in either source
+    return None
+
+
+def _build_financials_from_dataset(symbol: str, data: dict, fin: list) -> dict:
+    """Build full financials from the detailed dataset (multi-year history)."""
     # Use most recent 5 years (or whatever is available)
     recent = fin[:5]
 
@@ -207,6 +253,64 @@ def get_financials(symbol: str) -> Optional[dict]:
             }
             for r in fin
         ],
+    }
+
+
+# ── Sector-specific default assumptions ──────────────────────────────────────
+_SECTOR_DEFAULTS = {
+    "Information Technology": {"growth": 0.12, "margin": 0.22, "reinvest": 0.20, "net_income": 8000,  "capex": 2000, "depr": 1500, "shares": 400},
+    "Banking":                {"growth": 0.10, "margin": 0.25, "reinvest": 0.15, "net_income": 15000, "capex": 3000, "depr": 2000, "shares": 600},
+    "Financial Services":     {"growth": 0.12, "margin": 0.20, "reinvest": 0.20, "net_income": 5000,  "capex": 1500, "depr": 1000, "shares": 300},
+    "Automobile":             {"growth": 0.10, "margin": 0.12, "reinvest": 0.35, "net_income": 6000,  "capex": 4000, "depr": 3000, "shares": 300},
+    "Energy":                 {"growth": 0.08, "margin": 0.10, "reinvest": 0.40, "net_income": 12000, "capex": 8000, "depr": 5000, "shares": 500},
+    "Pharmaceutical":         {"growth": 0.10, "margin": 0.18, "reinvest": 0.25, "net_income": 3000,  "capex": 1500, "depr": 1000, "shares": 250},
+    "FMCG":                   {"growth": 0.10, "margin": 0.20, "reinvest": 0.20, "net_income": 5000,  "capex": 1500, "depr": 1000, "shares": 300},
+    "Infrastructure":         {"growth": 0.10, "margin": 0.10, "reinvest": 0.45, "net_income": 4000,  "capex": 5000, "depr": 3000, "shares": 300},
+    "Metals & Mining":        {"growth": 0.07, "margin": 0.12, "reinvest": 0.40, "net_income": 8000,  "capex": 6000, "depr": 4000, "shares": 400},
+}
+_DEFAULT_SECTOR = {"growth": 0.10, "margin": 0.15, "reinvest": 0.30, "net_income": 5000, "capex": 2000, "depr": 1000, "shares": 300}
+
+
+def _build_stub_financials(symbol: str, dir_entry: dict) -> dict:
+    """
+    Build a minimal financials dict for a directory-listed company
+    that has no detailed historical data. Uses sector-specific defaults
+    so the DCF pipeline can still produce a reasonable starting estimate.
+    The user can override all assumptions on the dashboard.
+    """
+    sector = dir_entry.get("sector", "")
+    defs   = _SECTOR_DEFAULTS.get(sector, _DEFAULT_SECTOR)
+
+    ni   = defs["net_income"]
+    depr = defs["depr"]
+    capex = defs["capex"]
+    fcf   = ni + depr - capex
+
+    return {
+        "symbol":               symbol.upper(),
+        "company_name":         dir_entry.get("company_name", symbol),
+        "sector":               sector,
+        "shares_outstanding":   defs["shares"],
+        "exchange":             dir_entry.get("exchange", "NSE"),
+        "token":                dir_entry.get("token", ""),
+
+        # Defaults — user can override in the dashboard
+        "net_income":             ni,
+        "depreciation":           depr,
+        "amortization":           100,
+        "capex":                  capex,
+        "working_capital_change": 500,
+
+        "revenue_growth_rate":    defs["growth"],
+        "operating_margin":       defs["margin"],
+        "free_cash_flow":         fcf,
+        "net_debt":               0,
+
+        # No history — charts will gracefully show empty
+        "history":                [],
+
+        # Flag so UI can show a notice
+        "_stub":                  True,
     }
 
 

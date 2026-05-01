@@ -89,10 +89,13 @@ def fetch_market_data():
     if not symbol:
         return jsonify({"error": "symbol is required"}), 400
 
-    # Fetch financials from local dataset
+    # Fetch financials from local dataset (detailed or directory stub)
     fin = get_financials(symbol)
     if not fin:
-        return jsonify({"error": f"No financial data found for '{symbol}'"}), 404
+        return jsonify({
+            "error": f"No financial data found for '{symbol}'. "
+                     f"Try searching by NSE symbol (e.g. SBIN, RELIANCE, TCS)."
+        }), 404
 
     # Fetch live price
     market = get_market_data(
@@ -105,14 +108,15 @@ def fetch_market_data():
     return jsonify({
         "symbol":            fin["symbol"],
         "company_name":      fin["company_name"],
-        "sector":            fin["sector"],
-        "exchange":          fin["exchange"],
+        "sector":            fin.get("sector", ""),
+        "exchange":          fin.get("exchange", "NSE"),
         "ltp":               market["ltp"],
         "market_cap":        market["market_cap_millions"],
         "price_source":      market["source"],
         "shares_outstanding":fin["shares_outstanding"],
         "financials":        fin,
         "history":           fin.get("history", []),
+        "is_stub":           fin.get("_stub", False),
     })
 
 

@@ -1,7 +1,7 @@
 """
 database.py
 ===========
-SQLite database layer for the XAI Bankruptcy SaaS Platform.
+SQLite database layer for the Intrinsic AI Platform.
 Tables: users, subscriptions, predictions, user_contributions
 """
 

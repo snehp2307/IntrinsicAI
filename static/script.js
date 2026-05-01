@@ -1,5 +1,5 @@
-/**
- * script.js — FinRisk Intelligence shared utilities
+﻿/**
+ * script.js — Intrinsic AI shared utilities
  */
 
 /**

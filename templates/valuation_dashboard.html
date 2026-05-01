@@ -1,5 +1,5 @@
-{% extends "base.html" %}
-{% block title %}Intrinsic Value Analyser — FinRisk Intelligence{% endblock %}
+﻿{% extends "base.html" %}
+{% block title %}Intrinsic Value Analyser — Intrinsic AI{% endblock %}
 
 {% block body %}
 <link rel="stylesheet" href="{{ url_for('static', filename='valuation.css') }}">
@@ -38,10 +38,10 @@
       <div id="searchMode">
         <div class="row g-3 align-items-end">
           <div class="col-md-5">
-            <label class="form-label text-muted small">Company / Symbol</label>
+            <label class="form-label text-muted small">Search by company name or NSE/BSE symbol <span class="text-info">(500+ companies)</span></label>
             <div class="position-relative">
               <input id="symbolInput" type="text" class="form-control val-input"
-                     placeholder="e.g. TCS, INFY, RELIANCE…" autocomplete="off">
+                     placeholder="e.g. SBIN, State Bank, RELIANCE, TCS…" autocomplete="off">
               <ul id="autocompleteList" class="val-autocomplete d-none"></ul>
             </div>
           </div>

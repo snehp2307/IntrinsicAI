@@ -68,6 +68,7 @@ function renderAC(results) {
     <li data-sym="${c.symbol}" data-exch="${c.exchange || 'NSE'}">
       <span class="ac-sym">${c.symbol}</span>
       <span class="ac-name">${c.company_name}</span>
+      ${c.sector ? `<span class="ac-sector" style="margin-left:auto;font-size:.7rem;opacity:.5">${c.sector}</span>` : ''}
     </li>`).join("");
   autocompleteList.querySelectorAll("li").forEach(li => {
     li.addEventListener("click", () => {
@@ -114,6 +115,19 @@ async function runFullAnalysis(useOverrides = false) {
     _marketData = mkt;
 
     updateCompanyBar(mkt);
+
+    // Show notice if using default assumptions (no detailed financials)
+    if (mkt.is_stub) {
+      const bar = document.getElementById("companyBar");
+      const existing = bar.querySelector(".stub-notice");
+      if (!existing) {
+        bar.insertAdjacentHTML("beforeend",
+          `<div class="stub-notice" style="width:100%;margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(59,130,246,.12);color:#93c5fd;font-size:.78rem;">
+            <i class="fas fa-info-circle me-1"></i>
+            Using sector-default assumptions — override in the Assumptions panel below for accurate valuation.
+          </div>`);
+      }
+    }
 
     // Build DCF payload (merge dataset defaults with user overrides if any)
     const payload = buildPayload(mkt, wacc, useOverrides);

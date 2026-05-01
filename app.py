@@ -1,5 +1,5 @@
 """
-app.py — XAI Bankruptcy SaaS Platform  (v2)
+app.py — Intrinsic AI Platform  (v2)
 ============================================
 Routes:
   /                     Landing + Pricing
@@ -910,6 +910,15 @@ def api_search():
 
 # ── Company detail page ───────────────────────────────────────────────────────
 
+def _safe_float(val, default=None):
+    """Convert a value to float, returning default if NaN or missing."""
+    try:
+        f = float(val)
+        return default if np.isnan(f) else f
+    except (TypeError, ValueError):
+        return default
+
+
 @app.route("/company/<path:company_name>")
 def company_detail(company_name):
     df = _get_company_data()
@@ -918,41 +927,120 @@ def company_detail(company_name):
     row = df[df["company_name"] == company_name]
     if row.empty:
         abort(404)
-    row = row.iloc[0]
+    # Serve the HTML shell — JS will fetch data from /api/company/<name>
+    return render_template("company.html", company_name=company_name)
 
-    from risk_engine import get_top_risk_factors, build_explanation
-    from preprocessing import FEATURE_COLS as FC
+
+@app.route("/api/company/<path:company_name>")
+def api_company_detail(company_name):
+    """JSON API consumed by company.html client-side JS."""
+    from risk_engine import RATIO_CONFIG, get_top_risk_factors, build_explanation
+    from preprocessing import FEATURE_COLS as FC, load_and_preprocess
+
+    df = _get_company_data()
+    if df is None:
+        return jsonify({"error": "Data not available"}), 503
+    rows = df[df["company_name"] == company_name]
+    if rows.empty:
+        return jsonify({"error": "Company not found"}), 404
+    row = rows.iloc[0]
+
     fc_avail = [c for c in FC if c in row.index]
 
     top_factors = get_top_risk_factors(row, top_n=6)
+    altman_z_val = _safe_float(row.get("altman_z"))
     explanation = build_explanation(
         float(row["risk_score"]),
         str(row.get("risk_category", "Low Risk")),
         top_factors,
-        float(row["altman_z"]) if "altman_z" in row.index and not np.isnan(float(row.get("altman_z", float("nan")))) else float("nan"),
+        altman_z_val if altman_z_val is not None else float("nan"),
     )
 
-    ratios = {c: round(float(row[c]), 4) for c in fc_avail
-              if not np.isnan(float(row.get(c, float("nan"))))}
+    ratios = {}
+    for c in fc_avail:
+        v = _safe_float(row.get(c))
+        if v is not None:
+            ratios[c] = round(v, 4)
 
-    company_data = {
+    # Financials dict for the template
+    fin_fields = ["revenue", "total_assets", "total_debt", "total_equity",
+                  "net_profit", "operating_cash_flow", "ebit",
+                  "current_assets", "current_liabilities", "interest_expense",
+                  "free_cash_flow", "inventory"]
+    financials = {}
+    for f in fin_fields:
+        financials[f] = _safe_float(row.get(f))
+    # EPS is not always present
+    financials["eps"] = _safe_float(row.get("eps"))
+
+    # Radar chart data — sub-scores for each ratio config dimension
+    radar_labels = [cfg["label"] for cfg in RATIO_CONFIG.values()]
+    radar_values = [float(row.get(f"sub_{k}", 5.0)) for k in RATIO_CONFIG]
+
+    # PCA coordinates
+    pca_x = _safe_float(row.get("pca_x"), 0.0)
+    pca_y = _safe_float(row.get("pca_y"), 0.0)
+
+    # Trend data (historical risk scores per fiscal year)
+    trend = _build_company_trend(company_name)
+
+    return jsonify({
         "company_name":   str(row["company_name"]),
         "tradingsymbol":  str(row.get("tradingsymbol", "")),
         "risk_score":     round(float(row["risk_score"]), 1),
         "risk_category":  str(row.get("risk_category", "")),
-        "altman_z":       round(float(row["altman_z"]), 3) if "altman_z" in row.index else None,
+        "altman_z":       round(altman_z_val, 3) if altman_z_val is not None else None,
         "cluster_label":  str(row.get("cluster_label", "")),
         "is_anomaly":     bool(row.get("is_anomaly", False)),
+        "pca_x":          round(pca_x, 4),
+        "pca_y":          round(pca_y, 4),
         "ratios":         ratios,
+        "financials":     financials,
         "top_factors":    top_factors,
         "explanation":    explanation,
-    }
-    return render_template("company.html", company=company_data)
+        "radar_labels":   radar_labels,
+        "radar_values":   radar_values,
+        "trend":          trend,
+    })
+
+
+def _build_company_trend(company_name: str) -> dict:
+    """Build year-over-year trend data for a company from the raw CSV."""
+    import pandas as pd
+    from preprocessing import load_and_preprocess
+    from risk_engine import compute_risk_scores
+
+    CSV = "data/companies.csv"
+    empty = {"years": [], "risk_score": [], "current_ratio": [],
+             "debt_to_equity": [], "profit_margin": []}
+    if not os.path.exists(CSV):
+        return empty
+    try:
+        df = load_and_preprocess(CSV)
+        comp = df[df["company_name"] == company_name].copy()
+        if comp.empty or "fiscal_year" not in comp.columns:
+            return empty
+        comp = comp.sort_values("fiscal_year")
+        comp = compute_risk_scores(comp)
+        years = comp["fiscal_year"].tolist()
+        return {
+            "years":          [str(y) for y in years],
+            "risk_score":     [round(_safe_float(v, 0), 1) for v in comp["risk_score"]],
+            "current_ratio":  [_safe_float(v) for v in comp.get("current_ratio", [])]
+                               if "current_ratio" in comp.columns else [],
+            "debt_to_equity": [_safe_float(v) for v in comp.get("debt_to_equity", [])]
+                               if "debt_to_equity" in comp.columns else [],
+            "profit_margin":  [_safe_float(v) for v in comp.get("profit_margin", [])]
+                               if "profit_margin" in comp.columns else [],
+        }
+    except Exception as e:
+        logging.getLogger(__name__).warning("Trend build failed for %s: %s", company_name, e)
+        return empty
 
 
 if __name__ == "__main__":
     print("="*55)
-    print("  XAI Bankruptcy Academic Platform")
+    print("  Intrinsic AI Platform")
     print("  http://127.0.0.1:5000")
     print("="*55)
     app.run(debug=True, host="0.0.0.0", port=5000)
