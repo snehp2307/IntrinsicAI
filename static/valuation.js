@@ -200,7 +200,11 @@ function renderResults(dcf, sc, rd) {
 
   // Fire AI explanation request asynchronously (doesn't block results)
   fetchAIExplanation(dcf);
+
+  // Fire multi-model valuation asynchronously
+  fetchMultiModel();
 }
+
 
 // ── KPI Cards ─────────────────────────────────────────────────────────────────
 function renderKPIs(dcf) {
@@ -328,7 +332,7 @@ function renderXAI(dcf) {
   }
 }
 
-// ── Mistral AI Explanation (async) ───────────────────────────────────────────
+// ── Mistral AI Investment Memo (async) ────────────────────────────────────────
 async function fetchAIExplanation(dcf) {
   const aiPanel = document.getElementById("aiExplanationPanel");
   if (!aiPanel) return;
@@ -339,58 +343,84 @@ async function fetchAIExplanation(dcf) {
   // Show loading state
   aiPanel.classList.remove("d-none");
   contentEl.innerHTML = `
-    <div class="text-center py-3">
+    <div class="text-center py-4">
       <div class="spinner-border spinner-border-sm text-info" role="status"></div>
-      <span class="ms-2 text-muted small">Generating institutional-grade valuation analysis...</span>
+      <div class="ms-2 text-muted small mt-2">Analyzing ${_marketData?.company_name || _currentSymbol || "company"} valuation data…</div>
+      <div class="text-muted small mt-1" style="font-size:.72rem;opacity:.6">Generating institutional-grade investment memo</div>
     </div>`;
   metaEl.innerHTML = "";
 
-  // Build payload from DCF result + market data
-  const xai = dcf.xai || {};
+  // ── Build payload from real DCF result + market data ────────────────────
+  const xai    = dcf.xai    || {};
+  const inputs = dcf.inputs || {};
+
+  // Real company data — no fallback to generic defaults
   const payload = {
-    company_name:         _marketData?.company_name || dcf.inputs?.symbol || "Unknown",
+    company_name:         _marketData?.company_name || inputs.symbol || _currentSymbol || "Unknown",
     symbol:               _currentSymbol || "",
     sector:               _marketData?.sector || "",
-    current_price:        xai.current_price || dcf.inputs?.current_price || _marketData?.ltp || 0,
+    current_price:        xai.current_price || inputs.current_price || _marketData?.ltp || 0,
     intrinsic_value:      xai.intrinsic_value || dcf.intrinsic_value_per_share || 0,
-    margin_of_safety:     xai.margin_of_safety || (dcf.margin_of_safety * 100) || 0,
+    margin_of_safety:     xai.margin_of_safety || dcf.margin_of_safety || 0,
     valuation_label:      xai.valuation_label || dcf.valuation_label || "",
-    wacc:                 ((dcf.inputs?.wacc || 0.10) * 100),
-    revenue_growth_rate:  ((dcf.inputs?.revenue_growth_rate || 0.10) * 100),
-    terminal_growth_rate: ((dcf.inputs?.terminal_growth_rate || 0.05) * 100),
-    operating_margin:     ((dcf.inputs?.operating_margin || 0.15) * 100),
-    free_cash_flow:       dcf.inputs?.net_income || 0,
-    net_debt:             dcf.inputs?.net_debt || 0,
+    wacc:                 inputs.wacc ? (inputs.wacc * 100) : 0,
+    revenue_growth_rate:  inputs.revenue_growth_rate ? (inputs.revenue_growth_rate * 100) : 0,
+    terminal_growth_rate: inputs.terminal_growth_rate ? (inputs.terminal_growth_rate * 100) : 0,
+    operating_margin:     inputs.operating_margin ? (inputs.operating_margin * 100) : 0,
+    free_cash_flow:       dcf.owner_earnings || inputs.net_income || 0,
+    net_debt:             inputs.net_debt || 0,
+    owner_earnings:       dcf.owner_earnings || 0,
+    enterprise_value:     dcf.enterprise_value || 0,
+    equity_value:         dcf.equity_value || 0,
+    pv_terminal_value:    dcf.pv_terminal_value || 0,
+    shares_outstanding:   inputs.shares_outstanding || 0,
+    reinvestment_rate:    inputs.reinvestment_rate ? (inputs.reinvestment_rate * 100) : 0,
+    tax_rate:             inputs.tax_rate ? (inputs.tax_rate * 100) : 0,
+    forecast_years:       inputs.forecast_years || 10,
+    driver_weights:       dcf.driver_weights || {},
     sensitivity:          xai.sensitivity || [],
     warnings:             dcf.warnings || [],
+    projections_summary:  (dcf.projections || []).map(p => ({ year: p.year, fcf: p.fcf, growth: p.growth_rate })),
   };
+
+  // Debug: verify real data is flowing to API
+  console.log("[Intrinsic AI] Payload sent to Mistral:", JSON.stringify(payload, null, 2));
 
   try {
     const resp = await postJSON("/valuation/ai_explanation", payload);
 
     if (resp.status === "ok" && resp.ai_explanation) {
-      // Format the explanation: convert newlines to HTML
-      const formatted = resp.ai_explanation
+      // Format: convert markdown bold + newlines to HTML, structure into sections
+      let formatted = resp.ai_explanation
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/#{1,3}\s*(.+)/g, '<strong class="d-block mt-3 mb-1" style="color:#60a5fa;font-size:.95rem">$1</strong>')
         .replace(/\n/g, '<br>');
 
-      contentEl.innerHTML = `<div class="ai-analysis-text">${formatted}</div>`;
+      // Detect and highlight verdict keywords
+      formatted = formatted
+        .replace(/(Buy|Strong Buy)/gi, '<span class="badge bg-success bg-opacity-25 text-success px-2 py-1 me-1" style="font-size:.78rem">$1</span>')
+        .replace(/(Avoid|Sell)/gi, '<span class="badge bg-danger bg-opacity-25 text-danger px-2 py-1 me-1" style="font-size:.78rem">$1</span>')
+        .replace(/(Hold|Watchlist|Watch)/gi, '<span class="badge bg-warning bg-opacity-25 text-warning px-2 py-1 me-1" style="font-size:.78rem">$1</span>');
+
+      contentEl.innerHTML = `<div class="ai-analysis-text" style="font-size:.86rem;line-height:1.75">${formatted}</div>`;
 
       // Meta info
-      const source = resp.ai_source === "mistral" ? "Mistral Small" : "Quantitative Fallback";
+      const source = resp.ai_source === "mistral" ? "Mistral AI" : "Quantitative Fallback";
       const cached = resp.ai_cached ? " · Cached" : "";
       const latency = resp.ai_latency_ms ? ` · ${resp.ai_latency_ms}ms` : "";
       metaEl.innerHTML = `
         <span class="badge bg-dark text-info" style="font-size:.7rem;font-weight:400">
-          <i class="fas fa-robot me-1"></i>${source}${cached}${latency}
+          <i class="fas fa-brain me-1"></i>${source}${cached}${latency}
         </span>`;
     } else {
       contentEl.innerHTML = `<p class="text-muted small">AI explanation unavailable. Showing quantitative valuation summary instead.</p>`;
     }
   } catch (err) {
+    console.error("[Intrinsic AI] Fetch error:", err);
     contentEl.innerHTML = `<p class="text-muted small">AI explanation unavailable. Showing quantitative valuation summary instead.</p>`;
   }
 }
+
 
 // ── Scenarios ─────────────────────────────────────────────────────────────────
 function renderScenarios(sc) {
@@ -711,4 +741,182 @@ async function runManualAnalysis() {
   } finally {
     showLoading(false);
   }
+}
+
+
+// ── Multi-Factor Valuation Models ────────────────────────────────────────────
+async function fetchMultiModel() {
+  const loadingEl = document.getElementById("multiModelLoading");
+  const gridEl    = document.getElementById("multiModelGrid");
+  const verdictEl = document.getElementById("compositeVerdict");
+  const metaEl    = document.getElementById("multiModelMeta");
+
+  if (!loadingEl || !gridEl) return;
+
+  loadingEl.classList.remove("d-none");
+  gridEl.innerHTML = "";
+  verdictEl.classList.add("d-none");
+
+  const payload = {
+    symbol:   _currentSymbol || "",
+    exchange: _marketData?.exchange || "NSE",
+  };
+
+  try {
+    const resp = await postJSON("/valuation/multi_model", payload);
+    loadingEl.classList.add("d-none");
+
+    if (resp.status !== "ok") {
+      gridEl.innerHTML = '<div class="text-muted small">Multi-model analysis unavailable.</div>';
+      return;
+    }
+
+    // Show latency
+    if (metaEl && resp.latency_ms) {
+      metaEl.textContent = `${resp.latency_ms}ms`;
+    }
+
+    // Render composite verdict
+    renderCompositeVerdict(resp.composite);
+
+    // Render individual model cards
+    renderModelCards(resp.models);
+
+  } catch (err) {
+    console.error("[Multi-Model] Fetch error:", err);
+    loadingEl.classList.add("d-none");
+    gridEl.innerHTML = '<div class="text-muted small">Multi-model analysis failed. Please retry.</div>';
+  }
+}
+
+function renderCompositeVerdict(composite) {
+  const el = document.getElementById("compositeVerdict");
+  if (!el || !composite) return;
+
+  el.classList.remove("d-none");
+
+  // Verdict badge
+  const badge = document.getElementById("compositeVerdictBadge");
+  const colorMap = { green: "#22c55e", red: "#ef4444", amber: "#f59e0b", blue: "#3b82f6" };
+  const bgMap    = { green: "#22c55e22", red: "#ef444422", amber: "#f59e0b22", blue: "#3b82f622" };
+  badge.textContent = composite.verdict;
+  badge.style.color = colorMap[composite.color] || "#8892a4";
+  badge.style.background = bgMap[composite.color] || "#1a2035";
+  badge.style.border = `1px solid ${colorMap[composite.color] || '#2d3748'}`;
+
+  // Description
+  document.getElementById("compositeVerdictDesc").textContent = composite.description;
+
+  // Signal counts
+  const sigEl = document.getElementById("compositeSignals");
+  const s = composite.signals || {};
+  sigEl.innerHTML = `
+    <div class="d-flex align-items-center gap-1" style="font-size:.82rem">
+      <span style="color:#22c55e">● ${s.bullish || 0} Bullish</span>
+      <span class="mx-1 text-muted">|</span>
+      <span style="color:#f59e0b">● ${s.neutral || 0} Neutral</span>
+      <span class="mx-1 text-muted">|</span>
+      <span style="color:#ef4444">● ${s.bearish || 0} Bearish</span>
+      <span class="mx-1 text-muted">|</span>
+      <span class="text-muted">${s.total || 0} total</span>
+    </div>`;
+
+  // Detail rows
+  if (composite.details && composite.details.length) {
+    let detailHTML = '<div class="mt-2" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:.5rem">';
+    for (const d of composite.details) {
+      const c = colorMap[d.color] || "#8892a4";
+      detailHTML += `
+        <div class="d-flex align-items-center gap-2 px-2 py-1" style="font-size:.76rem;border-left:3px solid ${c};background:#0e152308;border-radius:0 4px 4px 0">
+          <span style="color:${c};font-weight:600;min-width:50px">${d.signal}</span>
+          <span class="text-muted">${d.model}</span>
+        </div>`;
+    }
+    detailHTML += '</div>';
+    sigEl.innerHTML += detailHTML;
+  }
+}
+
+function renderModelCards(models) {
+  const grid = document.getElementById("multiModelGrid");
+  if (!grid || !models) return;
+
+  const MODEL_META = {
+    altman:    { icon: "fa-shield-alt",    title: "Altman Z-Score",        scoreKey: "score",  scoreFmt: v => v.toFixed(2), extra: "zone" },
+    ohlson:    { icon: "fa-chart-bar",     title: "Ohlson O-Score",        scoreKey: "score",  scoreFmt: v => v.toFixed(2), extra: "probability" },
+    piotroski: { icon: "fa-star",          title: "Piotroski F-Score",     scoreKey: "score",  scoreFmt: v => `${v}/9`,     extra: "verdict" },
+    dupont:    { icon: "fa-project-diagram",title: "DuPont Analysis",      scoreKey: "roe",    scoreFmt: v => `${v}%`,      extra: null },
+    ev_ebitda: { icon: "fa-balance-scale", title: "EV/EBITDA Multiple",    scoreKey: "ev_ebitda", scoreFmt: v => `${v}x`,   extra: "valuation" },
+    gordon:    { icon: "fa-seedling",      title: "Gordon Growth (DDM)",   scoreKey: "intrinsic_value", scoreFmt: v => `₹${v?.toFixed?.(2) || v}`, extra: "valuation" },
+    merton:    { icon: "fa-exclamation-triangle", title: "Merton Distance-to-Default", scoreKey: "distance_to_default", scoreFmt: v => `${v?.toFixed?.(2) || v}σ`, extra: "zone" },
+    beneish:   { icon: "fa-search",        title: "Beneish M-Score",       scoreKey: "score",  scoreFmt: v => v.toFixed(2), extra: "verdict" },
+    liquidity: { icon: "fa-tint",          title: "Liquidity & Coverage",  scoreKey: null,     scoreFmt: null,              extra: "overall" },
+  };
+
+  const colorMap = { green: "#22c55e", red: "#ef4444", amber: "#f59e0b", grey: "#6b7280", blue: "#3b82f6" };
+  const bgMap    = { green: "#22c55e11", red: "#ef444411", amber: "#f59e0b11", grey: "#6b728011", blue: "#3b82f611" };
+
+  let html = "";
+  for (const [key, data] of Object.entries(models)) {
+    const meta  = MODEL_META[key] || { icon: "fa-chart-pie", title: key, scoreKey: "score", scoreFmt: v => v, extra: null };
+    const color = data.color || "grey";
+    const c     = colorMap[color] || "#6b7280";
+    const bg    = bgMap[color] || "#0e152311";
+
+    // Score display
+    let scoreHTML = "";
+    if (data.error) {
+      scoreHTML = `<span class="text-muted small" style="font-size:.72rem">Data unavailable</span>`;
+    } else if (meta.scoreKey && data[meta.scoreKey] !== undefined) {
+      scoreHTML = `<span style="color:${c};font-size:1.2rem;font-weight:700">${meta.scoreFmt(data[meta.scoreKey])}</span>`;
+    }
+
+    // Extra badge (zone, verdict, etc.)
+    let extraHTML = "";
+    if (!data.error && meta.extra && data[meta.extra]) {
+      extraHTML = `<span class="px-2 py-1" style="font-size:.68rem;border-radius:12px;background:${bg};color:${c};border:1px solid ${c}33">${data[meta.extra]}</span>`;
+    }
+
+    // Risk indicator
+    const riskText = data.risk || "";
+    const riskColor = riskText.toLowerCase() === "low" ? "#22c55e" :
+                      riskText.toLowerCase() === "high" ? "#ef4444" : "#f59e0b";
+
+    // Components (show top 3)
+    let compHTML = "";
+    if (data.components && !data.error) {
+      const entries = Object.entries(data.components).slice(0, 3);
+      compHTML = '<div class="mt-2" style="font-size:.68rem;color:#8892a4">';
+      for (const [k, v] of entries) {
+        const displayVal = typeof v === "object" ? `${v.value}${v.unit || ""}` : v;
+        compHTML += `<div class="d-flex justify-content-between"><span>${k.split("(")[0].trim()}</span><span style="color:#e2e8f0">${displayVal}</span></div>`;
+      }
+      compHTML += '</div>';
+    }
+
+    html += `
+      <div class="col-md-4 col-sm-6">
+        <div class="card h-100" style="border-color:${c}22;background:#0b1120">
+          <div class="card-body p-3">
+            <div class="d-flex align-items-start justify-content-between mb-2">
+              <div class="d-flex align-items-center gap-2">
+                <i class="fas ${meta.icon}" style="color:${c};font-size:.9rem"></i>
+                <span style="font-size:.82rem;font-weight:600">${meta.title}</span>
+              </div>
+              ${riskText ? `<span style="font-size:.65rem;color:${riskColor};font-weight:600">${riskText} Risk</span>` : ""}
+            </div>
+            <div class="d-flex align-items-center gap-2 mb-2">
+              ${scoreHTML}
+              ${extraHTML}
+            </div>
+            <p class="mb-0 text-muted" style="font-size:.72rem;line-height:1.5">
+              ${data.error ? `<span style="color:#f59e0b">This model requires additional financial data currently unavailable.</span>` : (data.interpretation || "").substring(0, 150)}
+            </p>
+            ${compHTML}
+          </div>
+        </div>
+      </div>`;
+  }
+
+  grid.innerHTML = html;
 }

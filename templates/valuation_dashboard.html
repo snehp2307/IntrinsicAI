@@ -231,15 +231,15 @@
       </div>
     </div>
 
-    <!-- Intrinsic AI Analysis Panel (Mistral-powered) -->
+    <!-- Intrinsic AI Investment Memo (Mistral-powered) -->
     <div class="row g-3 mb-4">
       <div class="col-12">
         <div class="card d-none" id="aiExplanationPanel" style="border-color:#1e3a5f">
           <div class="card-header small fw-semibold d-flex align-items-center justify-content-between"
                style="background:linear-gradient(135deg,#0c1929,#132f4c);border-bottom:1px solid #1e3a5f">
             <span>
-              <i class="fas fa-robot me-2 text-info"></i>
-              Intrinsic AI Analysis
+              <i class="fas fa-brain me-2 text-info"></i>
+              Intrinsic AI Investment Memo
               <span class="text-info ms-1" style="font-size:.7rem;opacity:.7">Powered by Mistral</span>
             </span>
             <span id="aiExplanationMeta"></span>
@@ -249,6 +249,7 @@
         </div>
       </div>
     </div>
+
 
     <div class="row g-3 mb-4">
       <div class="col-md-7">
@@ -285,6 +286,41 @@
           </div>
         </div>
       </div>
+    <!-- ── Multi-Factor Valuation Models ──────────────────────────────────── -->
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="card" style="border-color:#1e3a5f">
+          <div class="card-header small fw-semibold d-flex align-items-center justify-content-between"
+               style="background:linear-gradient(135deg,#0c1929,#132f4c);border-bottom:1px solid #1e3a5f">
+            <span>
+              <i class="fas fa-layer-group me-2 text-info"></i>
+              Multi-Factor Valuation Models
+              <span class="text-info ms-1" style="font-size:.7rem;opacity:.7">10 Models</span>
+            </span>
+            <span id="multiModelMeta" class="text-muted small"></span>
+          </div>
+          <div class="card-body">
+            <!-- Composite Verdict -->
+            <div id="compositeVerdict" class="mb-4 d-none">
+              <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
+                <div style="font-size:.78rem;color:#8892a4;font-weight:600;text-transform:uppercase;letter-spacing:.05em">
+                  Composite Intrinsic AI Verdict
+                </div>
+                <span id="compositeVerdictBadge" class="px-3 py-1" style="border-radius:20px;font-weight:700;font-size:.9rem"></span>
+              </div>
+              <p id="compositeVerdictDesc" class="text-muted small mb-3"></p>
+              <div id="compositeSignals" class="d-flex gap-3 flex-wrap mb-3"></div>
+            </div>
+
+            <!-- Model cards grid -->
+            <div id="multiModelLoading" class="text-center py-3 d-none">
+              <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+              <span class="ms-2 text-muted small">Running 10 valuation models…</span>
+            </div>
+            <div id="multiModelGrid" class="row g-3"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="row g-3 mb-4">
@@ -309,6 +345,7 @@
         </div>
       </div>
     </div>
+
 
   </div>
 </div>

@@ -181,6 +181,7 @@ def _compute_driver_weights(inp: ValuationInput, base_iv: float) -> dict:
 
 
 def dcf_to_dict(r: DCFResult) -> dict:
+    inp = r.inputs
     return {
         "owner_earnings":            r.owner_earnings,
         "pv_fcfs":                   round(r.pv_fcfs, 2),
@@ -193,6 +194,23 @@ def dcf_to_dict(r: DCFResult) -> dict:
         "valuation_label":           r.valuation_label,
         "driver_weights":            r.driver_weights,
         "warnings":                  r.warnings,
+        "inputs": {
+            "net_income":             round(inp.net_income, 2),
+            "depreciation":           round(inp.depreciation, 2),
+            "amortization":           round(inp.amortization, 2),
+            "capex":                  round(inp.capex, 2),
+            "working_capital_change": round(inp.working_capital_change, 2),
+            "revenue_growth_rate":    round(inp.revenue_growth_rate, 6),
+            "operating_margin":       round(inp.operating_margin, 6),
+            "tax_rate":               round(inp.tax_rate, 4),
+            "reinvestment_rate":      round(inp.reinvestment_rate, 4),
+            "wacc":                   round(inp.wacc, 6),
+            "terminal_growth_rate":   round(inp.terminal_growth_rate, 6),
+            "forecast_years":         inp.forecast_years,
+            "current_price":          round(inp.current_price, 2),
+            "shares_outstanding":     round(inp.shares_outstanding, 4),
+            "net_debt":               round(inp.net_debt, 2),
+        },
         "projections": [{
             "year":        p.year,
             "growth_rate": round(p.growth_rate * 100, 2),

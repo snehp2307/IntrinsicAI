@@ -1,4 +1,4 @@
-﻿ <!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -44,17 +44,18 @@
     <span class="brand-text">Intrinsic<span class="brand-accent">AI</span></span>
   </div>
   <div class="nav-right">
-    <a href="/dashboard" class="nav-link">Dashboard</a>
     {% if current_user() %}
-      <a href="/predict" class="nav-link">Predict</a>
-      <a href="/logout" class="nav-link">Logout</a>
-    {% else %}
-      <a href="/login" class="nav-link">Login</a>
-      <a href="/register" class="nav-link">Register</a>
-    {% endif %}
+    <a href="/dashboard" class="nav-link">Dashboard</a>
+    <a href="/predict" class="nav-link">Predict</a>
+    <a href="/xai" class="nav-link">XAI</a>
     <a href="/valuation/dashboard" class="val-nav-btn">
       <i class="fas fa-chart-line"></i> Valuation
     </a>
+    <a href="/logout" class="nav-link">Logout</a>
+    {% else %}
+    <a href="/login" class="nav-link">Login</a>
+    <a href="/register" class="nav-link">Register</a>
+    {% endif %}
   </div>
 </nav>
 
@@ -74,17 +75,19 @@
   <p>Analyze 5,000+ companies using Machine Learning, Altman Z-Score, K-Means Clustering, and Explainable AI to identify bankruptcy risk before it's too late.</p>
 
   <div class="cta-row">
+    {% if current_user() %}
     <a href="/dashboard" class="btn-primary">View Dashboard →</a>
     <a href="/valuation/dashboard" class="btn-valuation">
       <i class="fas fa-chart-line"></i> Company Valuation
     </a>
-    {% if current_user() %}
     <a href="/predict" class="btn-secondary">Run Prediction</a>
     {% else %}
-    <a href="/register" class="btn-secondary">Get Started Free</a>
+    <a href="/register" class="btn-primary">Get Started Free →</a>
+    <a href="/login" class="btn-secondary">Login</a>
     {% endif %}
   </div>
 </div>
+
 
 <div class="features">
   <div class="feat-card">

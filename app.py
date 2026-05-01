@@ -275,6 +275,7 @@ def history():
 # ── Model Metrics ─────────────────────────────────────────────────────────────
 
 @app.route("/metrics")
+@login_required
 def metrics_page():
     if METRICS is None:
         flash("Models not trained yet.", "warning")
@@ -325,6 +326,7 @@ def _retrain_with_contributions(contributions):
 # ── /api/predict  (JSON endpoint called by predict.html) ─────────────────────
 
 @app.route("/api/predict", methods=["POST"])
+@login_required
 def api_predict():
     from preprocessing import FEATURE_COLS as FC
     from risk_engine import (RATIO_CONFIG, compute_risk_scores,
@@ -604,6 +606,7 @@ def api_predict():
 # ── /xai page ─────────────────────────────────────────────────────────────────
 
 @app.route("/xai")
+@login_required
 def xai_page():
     return render_template("xai.html")
 
@@ -611,6 +614,7 @@ def xai_page():
 # ── /api/xai/global ───────────────────────────────────────────────────────────
 
 @app.route("/api/xai/global")
+@login_required
 def api_xai_global():
     from risk_engine import RATIO_CONFIG
     from xai import compute_global_importance
@@ -632,6 +636,7 @@ def api_xai_global():
 # ── /api/xai/company/<name> ───────────────────────────────────────────────────
 
 @app.route("/api/xai/company/<path:company_name>")
+@login_required
 def api_xai_company(company_name):
     from risk_engine import RATIO_CONFIG, _ratio_sub_score, TOTAL_WEIGHT
     from xai import (compute_local_contributions, waterfall_data,
@@ -777,6 +782,7 @@ def api_xai_company(company_name):
 # ── /submissions page ─────────────────────────────────────────────────────────
 
 @app.route("/submissions")
+@login_required
 def submissions_page():
     return render_template("submissions.html")
 
@@ -784,6 +790,7 @@ def submissions_page():
 # ── /api/submissions ──────────────────────────────────────────────────────────
 
 @app.route("/api/submissions")
+@login_required
 def api_submissions():
     from user_store import get_all_submissions, adaptive_model
     subs = get_all_submissions()
