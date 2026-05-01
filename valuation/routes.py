@@ -9,6 +9,7 @@ Endpoints:
   POST /valuation/run_dcf
   POST /valuation/reverse_dcf
   POST /valuation/scenario_analysis
+  POST /valuation/ai_explanation
   GET  /valuation/dashboard
 """
 from __future__ import annotations
@@ -25,6 +26,7 @@ from .dcf_model    import ValuationInput, run_dcf, dcf_to_dict
 from .reverse_dcf  import implied_growth_rate
 from .scenario_analysis import run_scenarios
 from .xai_valuation import full_xai_payload
+from .ai_engine     import generate_ai_explanation
 
 valuation_bp = Blueprint("valuation", __name__,
                           url_prefix="/valuation",
@@ -217,3 +219,29 @@ def scenario_analysis_route():
     except Exception as e:
         log.error("[scenario_analysis] %s failed: %s", symbol or "manual", e)
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ── POST /valuation/ai_explanation ────────────────────────────────────────────
+
+@valuation_bp.route("/ai_explanation", methods=["POST"])
+def ai_explanation_route():
+    """
+    Generate an AI-powered equity research explanation using Mistral.
+    Accepts the same payload as run_dcf + the DCF result fields.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+
+    try:
+        t0 = time.time()
+        result = generate_ai_explanation(data)
+        log.info("[ai_explanation] %s completed in %.2fs (source=%s, cached=%s)",
+                 data.get("symbol", "manual"), time.time() - t0,
+                 result.get("ai_source"), result.get("ai_cached"))
+        return jsonify({"status": "ok", **result})
+    except Exception as e:
+        log.error("[ai_explanation] failed: %s", e)
+        return jsonify({
+            "status": "error",
+            "ai_explanation": f"AI explanation unavailable. Error: {str(e)}",
+            "ai_source": "error",
+        }), 500

@@ -51,3 +51,5 @@ Werkzeug==3.1.6
 xgboost==3.2.0
 python-dotenv>=1.0.0
 yfinance>=0.2.0
+mistralai>=1.0.0
+gunicorn>=22.0.0

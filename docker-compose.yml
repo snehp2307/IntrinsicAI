@@ -1,4 +1,4 @@
-﻿version: "3.9"
+version: "3.9"
 
 services:
   web:
@@ -6,20 +6,27 @@ services:
     container_name: intrinsicai_app
     ports:
       - "5000:5000"
+    env_file:
+      - .env
     environment:
-      - FLASK_ENV=development
-      - FLASK_DEBUG=1
-      - SECRET_KEY=dev-secret-change-in-prod
+      - FLASK_ENV=production
+      - PYTHONUNBUFFERED=1
     volumes:
-      # Mount source code for hot reload
-      - .:/app
       # Persist DB and trained models across restarts
-      - ./instance:/app/instance
-      - ./models:/app/models
-      - ./data:/app/data
-    command: >
-      sh -c "
-        python train_model.py &&
-        python app.py
-      "
+      - intrinsicai_instance:/app/instance
+      - intrinsicai_models:/app/models
+      - intrinsicai_logs:/app/logs
+      # Mount data directory for company dataset
+      - ./data:/app/data:ro
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  intrinsicai_instance:
+  intrinsicai_models:
+  intrinsicai_logs:

@@ -197,6 +197,9 @@ function renderResults(dcf, sc, rd) {
   renderReverseDCF(rd);
   renderWACCTable(dcf);
   document.getElementById("resultsSection").classList.remove("d-none");
+
+  // Fire AI explanation request asynchronously (doesn't block results)
+  fetchAIExplanation(dcf);
 }
 
 // ── KPI Cards ─────────────────────────────────────────────────────────────────
@@ -301,7 +304,7 @@ function renderDriversChart(dcf) {
   });
 }
 
-// ── XAI panel ────────────────────────────────────────────────────────────────
+// ── XAI panel (rule-based + sensitivity) ─────────────────────────────────────
 function renderXAI(dcf) {
   const xai = dcf.xai || {};
   setText("xaiExplanation", xai.explanation || "No explanation available.");
@@ -322,6 +325,70 @@ function renderXAI(dcf) {
   if (warns.length) {
     sensitivityEl.insertAdjacentHTML("afterend",
       warns.map(w => `<div class="val-warning"><i class="fas fa-exclamation-triangle me-1"></i>${w}</div>`).join(""));
+  }
+}
+
+// ── Mistral AI Explanation (async) ───────────────────────────────────────────
+async function fetchAIExplanation(dcf) {
+  const aiPanel = document.getElementById("aiExplanationPanel");
+  if (!aiPanel) return;
+
+  const contentEl = document.getElementById("aiExplanationContent");
+  const metaEl    = document.getElementById("aiExplanationMeta");
+
+  // Show loading state
+  aiPanel.classList.remove("d-none");
+  contentEl.innerHTML = `
+    <div class="text-center py-3">
+      <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+      <span class="ms-2 text-muted small">Generating institutional-grade valuation analysis...</span>
+    </div>`;
+  metaEl.innerHTML = "";
+
+  // Build payload from DCF result + market data
+  const xai = dcf.xai || {};
+  const payload = {
+    company_name:         _marketData?.company_name || dcf.inputs?.symbol || "Unknown",
+    symbol:               _currentSymbol || "",
+    sector:               _marketData?.sector || "",
+    current_price:        xai.current_price || dcf.inputs?.current_price || _marketData?.ltp || 0,
+    intrinsic_value:      xai.intrinsic_value || dcf.intrinsic_value_per_share || 0,
+    margin_of_safety:     xai.margin_of_safety || (dcf.margin_of_safety * 100) || 0,
+    valuation_label:      xai.valuation_label || dcf.valuation_label || "",
+    wacc:                 ((dcf.inputs?.wacc || 0.10) * 100),
+    revenue_growth_rate:  ((dcf.inputs?.revenue_growth_rate || 0.10) * 100),
+    terminal_growth_rate: ((dcf.inputs?.terminal_growth_rate || 0.05) * 100),
+    operating_margin:     ((dcf.inputs?.operating_margin || 0.15) * 100),
+    free_cash_flow:       dcf.inputs?.net_income || 0,
+    net_debt:             dcf.inputs?.net_debt || 0,
+    sensitivity:          xai.sensitivity || [],
+    warnings:             dcf.warnings || [],
+  };
+
+  try {
+    const resp = await postJSON("/valuation/ai_explanation", payload);
+
+    if (resp.status === "ok" && resp.ai_explanation) {
+      // Format the explanation: convert newlines to HTML
+      const formatted = resp.ai_explanation
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\n/g, '<br>');
+
+      contentEl.innerHTML = `<div class="ai-analysis-text">${formatted}</div>`;
+
+      // Meta info
+      const source = resp.ai_source === "mistral" ? "Mistral Small" : "Quantitative Fallback";
+      const cached = resp.ai_cached ? " · Cached" : "";
+      const latency = resp.ai_latency_ms ? ` · ${resp.ai_latency_ms}ms` : "";
+      metaEl.innerHTML = `
+        <span class="badge bg-dark text-info" style="font-size:.7rem;font-weight:400">
+          <i class="fas fa-robot me-1"></i>${source}${cached}${latency}
+        </span>`;
+    } else {
+      contentEl.innerHTML = `<p class="text-muted small">AI explanation unavailable. Showing quantitative valuation summary instead.</p>`;
+    }
+  } catch (err) {
+    contentEl.innerHTML = `<p class="text-muted small">AI explanation unavailable. Showing quantitative valuation summary instead.</p>`;
   }
 }
 

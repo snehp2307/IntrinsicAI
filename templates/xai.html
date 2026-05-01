@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -373,11 +373,23 @@ let currentCompanyData = null;
 
 // ── Load global importance on page load ──────────────────────────────────────
 async function loadGlobalImportance() {
-  const res  = await fetch("/api/xai/global");
-  const data = await res.json();
-  document.getElementById("globalLoading").style.display = "none";
-  document.getElementById("globalContent").style.display = "block";
-  renderGlobalImportance(data.importance);
+  try {
+    const res  = await fetch("/api/xai/global");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const items = data.global_importance;
+    if (!items || !items.length) {
+      document.getElementById("globalLoading").innerHTML = '<div style="color:var(--text-mute);font-family:var(--mono);font-size:.82rem">No explanation data available.</div>';
+      return;
+    }
+    document.getElementById("globalLoading").style.display = "none";
+    document.getElementById("globalContent").style.display = "block";
+    renderGlobalImportance(items);
+  } catch (err) {
+    console.error("Global importance load failed:", err);
+    document.getElementById("globalLoading").innerHTML = '<div style="color:var(--red);font-family:var(--mono);font-size:.82rem">Failed to load explainability data. Please try again.</div>';
+  }
 }
 
 function renderGlobalImportance(items) {
@@ -497,21 +509,34 @@ async function loadCompanyXAI() {
   document.getElementById("companyXAIContent").style.display = "none";
   document.getElementById("companyXAILoading").style.display = "block";
 
-  const res  = await fetch("/api/xai/company/" + encodeURIComponent(name));
-  const data = await res.json();
+  try {
+    const res  = await fetch("/api/xai/company/" + encodeURIComponent(name));
+    const data = await res.json();
 
-  document.getElementById("companyXAILoading").style.display = "none";
+    document.getElementById("companyXAILoading").style.display = "none";
 
-  if (data.error) {
+    if (data.error) {
+      document.getElementById("companyXAIPlaceholder").style.display = "block";
+      document.getElementById("companyXAIPlaceholder").innerHTML = `<div style="color:var(--red);font-family:var(--mono);font-size:.85rem;">Company not found. Try valid symbol or name.</div>`;
+      return;
+    }
+
+    if (!data.contributions || !data.contributions.length) {
+      document.getElementById("companyXAIPlaceholder").style.display = "block";
+      document.getElementById("companyXAIPlaceholder").innerHTML = `<div style="color:var(--text-mute);font-family:var(--mono);font-size:.85rem;">No explanation data available.</div>`;
+      return;
+    }
+
+    currentCompanyData = data;
+    document.getElementById("companyXAIContent").style.display = "block";
+    renderCompanyXAI(data);
+    showTab("contributions");
+  } catch (err) {
+    console.error("Company XAI load failed:", err);
+    document.getElementById("companyXAILoading").style.display = "none";
     document.getElementById("companyXAIPlaceholder").style.display = "block";
-    document.getElementById("companyXAIPlaceholder").innerHTML = `<div style="color:var(--red);font-family:var(--mono)">Company "${name}" not found in dataset.</div>`;
-    return;
+    document.getElementById("companyXAIPlaceholder").innerHTML = '<div style="color:var(--red);font-family:var(--mono);font-size:.85rem;">Failed to load explainability data. Please try again.</div>';
   }
-
-  currentCompanyData = data;
-  document.getElementById("companyXAIContent").style.display = "block";
-  renderCompanyXAI(data);
-  showTab("contributions");
 }
 
 function renderCompanyXAI(d) {
@@ -539,7 +564,7 @@ function renderCompanyXAI(d) {
 
 // ── Contributions panel ───────────────────────────────────────────────────────
 function renderContributions(d) {
-  const contribs = d.contributions;
+  const contribs = d.contributions || d.local_contributions || [];
 
   // Horizontal bar chart
   const ctx = document.getElementById("contributionChart").getContext("2d");
