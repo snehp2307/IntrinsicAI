@@ -190,6 +190,31 @@ def get_financials(symbol: str) -> Optional[dict]:
             result["data_source"] = "company_specific"
             result["data_warnings"] = ["Using curated multi-year financial data."]
             result["_stub"] = False
+
+            # Supplement missing balance sheet data from yfinance
+            bs_fields = ["equity", "total_assets", "total_liabilities", "current_assets",
+                         "current_liabilities", "cash", "retained_earnings", "inventory",
+                         "receivables", "ppe", "gross_profit", "interest_expense",
+                         "long_term_debt", "beta", "payout_ratio", "trailing_pe",
+                         "revenue_prev", "net_income_prev", "total_assets_prev",
+                         "total_liabilities_prev", "equity_prev", "current_assets_prev",
+                         "current_liabilities_prev", "receivables_prev", "ppe_prev",
+                         "gross_profit_prev", "sga_expense", "sga_expense_prev",
+                         "long_term_debt_prev", "dividend_per_share", "dividend_yield",
+                         "forward_pe", "price_to_book", "ev_to_ebitda"]
+            missing_bs = [f for f in bs_fields if not result.get(f)]
+            if missing_bs:
+                from .market_data import fetch_yf_financials
+                dir_entry = get_directory_entry(symbol)
+                yf_supp = fetch_yf_financials(symbol, exchange=(dir_entry or {}).get("exchange", "NSE"))
+                if yf_supp:
+                    for field in missing_bs:
+                        val = yf_supp.get(field)
+                        if val and val != 0:
+                            result[field] = val
+                    result["data_warnings"].append("Balance sheet data supplemented from yfinance.")
+                    log.info("Supplemented %d balance sheet fields from yfinance for %s", len(missing_bs), symbol)
+
             return result
 
     # ── Attempt 2: yfinance live financial extraction ─────────────────────────

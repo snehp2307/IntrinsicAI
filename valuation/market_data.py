@@ -542,6 +542,42 @@ def fetch_yf_financials(symbol: str, exchange: str = "NSE") -> Optional[dict]:
             "operating_margin_computed": op_margin is not None,
             "tax_rate_computed":         actual_tax_rate is not None,
 
+            # ── Previous year data (for Piotroski, Beneish, etc.) ─────
+            "revenue_prev":             round(_get(inc, ["Total Revenue", "Revenue"], col_idx=1) / scale, 2) if inc is not None and len(inc.columns) > 1 else 0,
+            "net_income_prev":          round(_get(inc, ["Net Income", "Net Income Common Stockholders"], col_idx=1) / scale, 2) if inc is not None and len(inc.columns) > 1 else 0,
+            "total_assets_prev":        round(_get(bs, ["Total Assets"], col_idx=1) / scale, 2) if bs is not None and len(bs.columns) > 1 else 0,
+            "total_liabilities_prev":   round(_get(bs, ["Total Liabilities Net Minority Interest", "Total Liab"], col_idx=1) / scale, 2) if bs is not None and len(bs.columns) > 1 else 0,
+            "equity_prev":              round(_get(bs, ["Total Equity Gross Minority Interest", "Stockholders Equity"], col_idx=1) / scale, 2) if bs is not None and len(bs.columns) > 1 else 0,
+            "current_assets_prev":      round(_get(bs, ["Current Assets"], col_idx=1) / scale, 2) if bs is not None and len(bs.columns) > 1 else 0,
+            "current_liabilities_prev": round(_get(bs, ["Current Liabilities"], col_idx=1) / scale, 2) if bs is not None and len(bs.columns) > 1 else 0,
+
+            # ── Detailed line items for multi-model ───────────────────
+            "retained_earnings":        round(_get(bs, ["Retained Earnings", "Retained Profit"]) / scale, 2),
+            "inventory":                round(_get(bs, ["Inventory", "Net Inventory"]) / scale, 2),
+            "receivables":              round(_get(bs, ["Accounts Receivable", "Net Receivables", "Receivables"]) / scale, 2),
+            "receivables_prev":         round(_get(bs, ["Accounts Receivable", "Net Receivables", "Receivables"], col_idx=1) / scale, 2) if bs is not None and len(bs.columns) > 1 else 0,
+            "ppe":                      round(_get(bs, ["Net PPE", "Property Plant And Equipment", "Gross PPE"]) / scale, 2),
+            "ppe_prev":                 round(_get(bs, ["Net PPE", "Property Plant And Equipment", "Gross PPE"], col_idx=1) / scale, 2) if bs is not None and len(bs.columns) > 1 else 0,
+            "gross_profit":             round(_get(inc, ["Gross Profit"]) / scale, 2),
+            "gross_profit_prev":        round(_get(inc, ["Gross Profit"], col_idx=1) / scale, 2) if inc is not None and len(inc.columns) > 1 else 0,
+            "sga_expense":              round(_get(inc, ["Selling General And Administration", "General And Administrative Expense"]) / scale, 2),
+            "sga_expense_prev":         round(_get(inc, ["Selling General And Administration", "General And Administrative Expense"], col_idx=1) / scale, 2) if inc is not None and len(inc.columns) > 1 else 0,
+            "interest_expense":         round(abs(_get(inc, ["Interest Expense", "Interest Expense Non Operating", "Net Interest Income"])) / scale, 2),
+            "long_term_debt":           round(_get(bs, ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"]) / scale, 2),
+            "long_term_debt_prev":      round(_get(bs, ["Long Term Debt", "Long Term Debt And Capital Lease Obligation"], col_idx=1) / scale, 2) if bs is not None and len(bs.columns) > 1 else 0,
+
+            # ── Dividend data ─────────────────────────────────────────
+            "dividend_per_share":       info.get("dividendRate", 0) or 0,
+            "dividend_yield":           info.get("dividendYield", 0) or 0,
+            "payout_ratio":             info.get("payoutRatio", 0) or 0,
+
+            # ── Valuation multiples from yfinance ─────────────────────
+            "trailing_pe":              info.get("trailingPE", 0) or 0,
+            "forward_pe":               info.get("forwardPE", 0) or 0,
+            "price_to_book":            info.get("priceToBook", 0) or 0,
+            "ev_to_ebitda":             info.get("enterpriseToEbitda", 0) or 0,
+            "beta":                     info.get("beta", 1.0) or 1.0,
+
             # History
             "history":              history,
 

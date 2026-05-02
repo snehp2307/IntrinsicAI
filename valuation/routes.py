@@ -280,6 +280,7 @@ def multi_model_route():
         altman_z_score, ohlson_o_score, piotroski_f_score,
         dupont_analysis, ev_ebitda_analysis, gordon_growth_model,
         merton_distance_to_default, beneish_m_score, liquidity_analysis,
+        graham_number, pe_relative_valuation, residual_income_model,
     )
 
     data = request.get_json(force=True, silent=True) or {}
@@ -309,24 +310,64 @@ def multi_model_route():
     capex            = _fv(merged, "capex", 0)
     revenue          = _fv(merged, "revenue", 0)
     if revenue <= 0:
-        # Fallback: estimate revenue from net_income and margin
         revenue = net_income / max(_fv(merged, "operating_margin", 0.15), 0.01)
     ebit             = _fv(merged, "ebit", 0)
     if ebit <= 0:
-        ebit = net_income / 0.75  # Approximate pre-tax
+        ebit = net_income / 0.75
     ebitda           = ebit + depreciation
     net_debt         = _fv(merged, "net_debt", 0)
     shares           = _fv(merged, "shares_outstanding", 1.0)
 
-    # Use real balance sheet data if available (from yfinance extraction)
-    total_assets     = _fv(merged, "total_assets", 0)
+    # Real balance sheet data
+    total_assets      = _fv(merged, "total_assets", 0)
     total_liabilities = _fv(merged, "total_liabilities", 0)
-    equity           = _fv(merged, "equity", 0)
-    current_assets   = _fv(merged, "current_assets", 0)
-    current_liab     = _fv(merged, "current_liabilities", 0)
-    cash             = _fv(merged, "cash", 0)
+    equity            = _fv(merged, "equity", 0)
+    current_assets    = _fv(merged, "current_assets", 0)
+    current_liab      = _fv(merged, "current_liabilities", 0)
+    cash              = _fv(merged, "cash", 0)
 
-    # Fallback estimates only if real data is zero
+    # Real previous-year data (from yfinance multi-year extraction)
+    revenue_prev        = _fv(merged, "revenue_prev", 0)
+    net_income_prev     = _fv(merged, "net_income_prev", 0)
+    total_assets_prev   = _fv(merged, "total_assets_prev", 0)
+    total_liab_prev     = _fv(merged, "total_liabilities_prev", 0)
+    equity_prev         = _fv(merged, "equity_prev", 0)
+    current_assets_prev = _fv(merged, "current_assets_prev", 0)
+    current_liab_prev   = _fv(merged, "current_liabilities_prev", 0)
+
+    # Real detailed line items
+    retained_earnings   = _fv(merged, "retained_earnings", 0)
+    inventory           = _fv(merged, "inventory", 0)
+    receivables         = _fv(merged, "receivables", 0)
+    receivables_prev    = _fv(merged, "receivables_prev", 0)
+    ppe                 = _fv(merged, "ppe", 0)
+    ppe_prev            = _fv(merged, "ppe_prev", 0)
+    gross_profit        = _fv(merged, "gross_profit", 0)
+    gross_profit_prev   = _fv(merged, "gross_profit_prev", 0)
+    sga_expense         = _fv(merged, "sga_expense", 0)
+    sga_expense_prev    = _fv(merged, "sga_expense_prev", 0)
+    interest_expense    = _fv(merged, "interest_expense", 0)
+    long_term_debt      = _fv(merged, "long_term_debt", 0)
+    long_term_debt_prev = _fv(merged, "long_term_debt_prev", 0)
+
+    # Dividend and valuation data
+    dividend_payout     = _fv(merged, "payout_ratio", 0)
+    trailing_pe         = _fv(merged, "trailing_pe", 0)
+    beta                = _fv(merged, "beta", 1.0)
+
+    # Derived values
+    fcf              = _fv(merged, "free_cash_flow", 0) or (net_income + depreciation - capex)
+    operating_cf     = _fv(merged, "operating_cash_flow", 0) or fcf
+    growth           = _fv(merged, "revenue_growth_rate", 0.10)
+    margin           = _fv(merged, "operating_margin", 0.15)
+    wacc             = _fv(merged, "wacc", 0.10)
+    terminal_g       = _fv(merged, "terminal_growth_rate", 0.05)
+    data_source      = merged.get("data_source", "unknown")
+
+    # Flag: do we have real previous-year data?
+    has_prev_year = total_assets_prev > 0 and revenue_prev > 0
+
+    # Fallback estimates only when real data is zero
     if total_assets <= 0:
         total_assets = max(revenue * 0.8, 1.0)
     if total_liabilities <= 0:
@@ -334,27 +375,38 @@ def multi_model_route():
     if equity <= 0:
         equity = max(total_assets - total_liabilities, 0.001)
     if current_assets <= 0:
-        working_capital = max(total_assets * 0.2, 0.001)
-        current_liab    = total_liabilities * 0.4
-        current_assets  = working_capital + current_liab
+        current_liab = total_liabilities * 0.4
+        current_assets = max(total_assets * 0.2, 0.001) + current_liab
     elif current_liab <= 0:
         current_liab = total_liabilities * 0.4
     if cash <= 0:
         cash = max(total_assets * 0.05, 0.001)
+    if retained_earnings <= 0:
+        retained_earnings = net_income * 3  # Last resort approximation
+    if interest_expense <= 0:
+        interest_expense = max(total_liabilities * 0.06, 0.001)
 
-    working_capital  = current_assets - current_liab if current_assets > 0 else max(total_assets * 0.2, 0.001)
-    retained_earnings = net_income * 3  # Approximation
-    fcf              = _fv(merged, "free_cash_flow", 0) or (net_income + depreciation - capex)
-    growth           = _fv(merged, "revenue_growth_rate", 0.10)
-    margin           = _fv(merged, "operating_margin", 0.15)
-    wacc             = _fv(merged, "wacc", 0.10)
-    terminal_g       = _fv(merged, "terminal_growth_rate", 0.05)
-    data_source      = merged.get("data_source", "unknown")
+    working_capital = current_assets - current_liab
+
+    # EPS and BVPS
+    eps  = net_income / max(shares, 1) if shares > 0 else 0
+    bvps = equity / max(shares, 1) if shares > 0 else 0
+    roe  = net_income / max(equity, 0.001)
+
+    # Sector P/E medians (industry-specific)
+    sector = merged.get("sector", "")
+    SECTOR_PE = {
+        "Financial Services": 15, "Technology": 30, "Consumer Cyclical": 25,
+        "Healthcare": 28, "Industrials": 20, "Energy": 12,
+        "Consumer Defensive": 22, "Basic Materials": 14, "Utilities": 16,
+        "Communication Services": 18, "Real Estate": 20,
+    }
+    sector_pe = SECTOR_PE.get(sector, 20.0)
 
     results = {}
     t0 = time.time()
 
-    # 1. Altman Z-Score
+    # ── 1. Altman Z-Score ─────────────────────────────────────────────────
     try:
         results["altman"] = altman_z_score(
             working_capital=working_capital, total_assets=total_assets,
@@ -365,38 +417,52 @@ def multi_model_route():
     except Exception as e:
         results["altman"] = {"error": str(e), "model": "Altman Z-Score"}
 
-    # 2. Ohlson O-Score
+    # ── 2. Ohlson O-Score ─────────────────────────────────────────────────
     try:
         results["ohlson"] = ohlson_o_score(
             total_assets=total_assets, total_liabilities=total_liabilities,
             working_capital=working_capital, current_liabilities=current_liab,
             current_assets=current_assets, net_income=net_income,
-            funds_from_operations=fcf,
+            funds_from_operations=operating_cf,
         )
     except Exception as e:
         results["ohlson"] = {"error": str(e), "model": "Ohlson O-Score"}
 
-    # 3. Piotroski F-Score
+    # ── 3. Piotroski F-Score (using REAL prev-year data) ──────────────────
     try:
+        if has_prev_year:
+            roa_prev = net_income_prev / max(total_assets_prev, 0.001)
+            cr_prev  = current_assets_prev / max(current_liab_prev, 0.001)
+            gm       = gross_profit / max(revenue, 0.001) if gross_profit > 0 else margin
+            gm_prev  = gross_profit_prev / max(revenue_prev, 0.001) if gross_profit_prev > 0 else gm * 0.97
+            at_prev  = revenue_prev / max(total_assets_prev, 0.001)
+            ltd_prev = long_term_debt_prev if long_term_debt_prev > 0 else total_liab_prev * 0.6
+        else:
+            # No previous year — cannot compute Piotroski accurately
+            results["piotroski"] = {"error": "Previous year financial data unavailable for comparative analysis.", "model": "Piotroski F-Score"}
+            raise StopIteration  # skip to next
+
         results["piotroski"] = piotroski_f_score(
             net_income=net_income, total_assets=total_assets,
-            operating_cash_flow=fcf,
-            roa_prev=net_income * 0.9 / total_assets,
-            long_term_debt=total_liabilities * 0.6,
-            long_term_debt_prev=total_liabilities * 0.65,
+            operating_cash_flow=operating_cf,
+            roa_prev=roa_prev,
+            long_term_debt=long_term_debt if long_term_debt > 0 else total_liabilities * 0.6,
+            long_term_debt_prev=ltd_prev,
             current_ratio=current_assets / max(current_liab, 0.001),
-            current_ratio_prev=current_assets / max(current_liab, 0.001) * 0.95,
+            current_ratio_prev=cr_prev,
             shares_outstanding=shares,
-            shares_outstanding_prev=shares,
-            gross_margin=margin * 1.3,
-            gross_margin_prev=margin * 1.25,
-            asset_turnover=revenue / total_assets,
-            asset_turnover_prev=revenue * 0.95 / total_assets,
+            shares_outstanding_prev=shares,  # From yfinance — same fiscal year
+            gross_margin=gm,
+            gross_margin_prev=gm_prev,
+            asset_turnover=revenue / max(total_assets, 0.001),
+            asset_turnover_prev=at_prev,
         )
+    except StopIteration:
+        pass
     except Exception as e:
         results["piotroski"] = {"error": str(e), "model": "Piotroski F-Score"}
 
-    # 4. DuPont Analysis
+    # ── 4. DuPont Analysis ────────────────────────────────────────────────
     try:
         results["dupont"] = dupont_analysis(
             net_income=net_income, sales=revenue,
@@ -405,22 +471,32 @@ def multi_model_route():
     except Exception as e:
         results["dupont"] = {"error": str(e), "model": "DuPont Analysis"}
 
-    # 5. EV/EBITDA
+    # ── 5. EV/EBITDA (using real EV/EBITDA from yfinance if available) ────
     try:
+        # Sector EV/EBITDA medians
+        SECTOR_EV = {
+            "Financial Services": 12, "Technology": 20, "Consumer Cyclical": 14,
+            "Healthcare": 16, "Industrials": 11, "Energy": 8,
+            "Consumer Defensive": 13, "Basic Materials": 9, "Utilities": 10,
+            "Communication Services": 12, "Real Estate": 15,
+        }
+        industry_ev = SECTOR_EV.get(sector, 12.0)
+
         results["ev_ebitda"] = ev_ebitda_analysis(
             total_debt=total_liabilities, cash=cash,
             equity_market_value=market_cap or equity * 1.5,
             ebitda=max(ebitda, 0.001),
-            industry_median_ev_ebitda=10.0,
+            industry_median_ev_ebitda=industry_ev,
         )
     except Exception as e:
         results["ev_ebitda"] = {"error": str(e), "model": "EV/EBITDA"}
 
-    # 6. Gordon Growth (DDM)
+    # ── 6. Gordon Growth (DDM) — using REAL dividend data ─────────────────
     try:
+        actual_payout = dividend_payout if dividend_payout > 0 else 0.30
         results["gordon"] = gordon_growth_model(
-            earnings_per_share=net_income / max(shares, 1),
-            dividend_payout_ratio=0.35,
+            earnings_per_share=eps,
+            dividend_payout_ratio=actual_payout,
             required_return=wacc,
             growth_rate=min(terminal_g, wacc - 0.01),
             current_stock_price=market_price,
@@ -428,49 +504,112 @@ def multi_model_route():
     except Exception as e:
         results["gordon"] = {"error": str(e), "model": "Gordon Growth Model"}
 
-    # 7. Merton Distance-to-Default
+    # ── 7. Merton Distance-to-Default — using real beta for volatility ────
     try:
+        # Estimate asset volatility from beta (levered → unlevered)
+        debt_equity = total_liabilities / max(equity, 0.001)
+        asset_vol = max(beta * 0.15 / (1 + debt_equity * 0.65), 0.08)  # Unlevered vol proxy
+
         results["merton"] = merton_distance_to_default(
             asset_value=total_assets,
             debt_face_value=max(total_liabilities, 0.001),
-            asset_volatility=0.25,
-            risk_free_rate=0.065,
+            asset_volatility=asset_vol,
+            risk_free_rate=0.07,  # Indian 10Y govt bond
             time_horizon=1.0,
         )
     except Exception as e:
         results["merton"] = {"error": str(e), "model": "Merton DD"}
 
-    # 8. Beneish M-Score
+    # ── 8. Beneish M-Score (using REAL prev-year data) ────────────────────
     try:
-        gross_profit = revenue * margin * 1.3
-        results["beneish"] = beneish_m_score(
-            receivables_t=revenue * 0.12, receivables_t1=revenue * 0.11,
-            sales_t=revenue, sales_t1=revenue * 0.92,
-            gross_profit_t=gross_profit, gross_profit_t1=gross_profit * 0.95,
-            assets_t=total_assets, assets_t1=total_assets * 0.95,
-            ppe_t=total_assets * 0.45, ppe_t1=total_assets * 0.44,
-            total_accruals_t=ebit * 0.08, total_accruals_t1=ebit * 0.07,
-            sg_expense_t=gross_profit * 0.22, sg_expense_t1=gross_profit * 0.21,
-            long_term_debt_t=total_liabilities * 0.55,
-            long_term_debt_t1=total_liabilities * 0.57,
-            current_assets_t=current_assets, current_assets_t1=current_assets * 0.96,
-            current_liabilities_t=current_liab, current_liabilities_t1=current_liab * 0.97,
-            net_income_t=net_income, cash_from_ops_t=fcf,
-        )
+        if has_prev_year and gross_profit > 0 and revenue_prev > 0:
+            # Use real receivables, or estimate from revenue
+            recv_t  = receivables if receivables > 0 else revenue * 0.12
+            recv_t1 = receivables_prev if receivables_prev > 0 else revenue_prev * 0.12
+            gp_t    = gross_profit
+            gp_t1   = gross_profit_prev if gross_profit_prev > 0 else gp_t * 0.95
+            sga_t   = sga_expense if sga_expense > 0 else gp_t * 0.20
+            sga_t1  = sga_expense_prev if sga_expense_prev > 0 else sga_t * 0.97
+            ppe_t   = ppe if ppe > 0 else total_assets * 0.40
+            ppe_t1  = ppe_prev if ppe_prev > 0 else total_assets_prev * 0.40
+            accruals_t  = net_income - operating_cf
+            accruals_t1 = net_income_prev - (operating_cf * 0.95) if net_income_prev else accruals_t * 0.95
+
+            results["beneish"] = beneish_m_score(
+                receivables_t=recv_t, receivables_t1=recv_t1,
+                sales_t=revenue, sales_t1=revenue_prev,
+                gross_profit_t=gp_t, gross_profit_t1=gp_t1,
+                assets_t=total_assets, assets_t1=total_assets_prev,
+                ppe_t=ppe_t, ppe_t1=ppe_t1,
+                total_accruals_t=accruals_t, total_accruals_t1=accruals_t1,
+                sg_expense_t=sga_t, sg_expense_t1=sga_t1,
+                long_term_debt_t=long_term_debt if long_term_debt > 0 else total_liabilities * 0.55,
+                long_term_debt_t1=long_term_debt_prev if long_term_debt_prev > 0 else total_liab_prev * 0.55,
+                current_assets_t=current_assets, current_assets_t1=current_assets_prev,
+                current_liabilities_t=current_liab, current_liabilities_t1=current_liab_prev,
+                net_income_t=net_income, cash_from_ops_t=operating_cf,
+            )
+        else:
+            results["beneish"] = {"error": "Previous year financial data unavailable for Beneish M-Score analysis.", "model": "Beneish M-Score"}
     except Exception as e:
         results["beneish"] = {"error": str(e), "model": "Beneish M-Score"}
 
-    # 9. Liquidity Analysis
+    # ── 9. Liquidity Analysis — using REAL inventory & interest ───────────
     try:
+        inv = inventory if inventory > 0 else current_assets * 0.25
+        int_exp = interest_expense if interest_expense > 0 else max(total_liabilities * 0.06, 0.001)
+
         results["liquidity"] = liquidity_analysis(
             current_assets=current_assets, current_liabilities=current_liab,
-            inventory=current_assets * 0.3, cash=cash,
+            inventory=inv, cash=cash,
             total_debt=total_liabilities, ebit=ebit,
-            interest_expense=max(total_liabilities * 0.06, 0.001),
-            operating_cash_flow=fcf,
+            interest_expense=int_exp,
+            operating_cash_flow=operating_cf,
         )
     except Exception as e:
         results["liquidity"] = {"error": str(e), "model": "Liquidity Analysis"}
+
+    # ── 10. Graham Number ─────────────────────────────────────────────────
+    try:
+        if eps > 0 and bvps > 0:
+            results["graham"] = graham_number(
+                earnings_per_share=eps,
+                book_value_per_share=bvps,
+                current_price=market_price,
+            )
+        else:
+            results["graham"] = {"error": "Positive EPS and Book Value required.", "model": "Graham Number"}
+    except Exception as e:
+        results["graham"] = {"error": str(e), "model": "Graham Number"}
+
+    # ── 11. P/E Relative Valuation ────────────────────────────────────────
+    try:
+        if eps > 0 and market_price > 0:
+            results["pe_relative"] = pe_relative_valuation(
+                earnings_per_share=eps,
+                current_price=market_price,
+                sector_pe=sector_pe,
+                market_pe=22.0,  # Nifty 50 historical avg
+            )
+        else:
+            results["pe_relative"] = {"error": "Positive EPS and market price required.", "model": "P/E Relative Valuation"}
+    except Exception as e:
+        results["pe_relative"] = {"error": str(e), "model": "P/E Relative Valuation"}
+
+    # ── 12. Residual Income Model ─────────────────────────────────────────
+    try:
+        if bvps > 0 and roe != 0:
+            results["residual_income"] = residual_income_model(
+                book_value_per_share=bvps,
+                roe=roe,
+                cost_of_equity=wacc,
+                growth_rate=terminal_g,
+                current_price=market_price,
+            )
+        else:
+            results["residual_income"] = {"error": "Positive book value and ROE required.", "model": "Residual Income Model"}
+    except Exception as e:
+        results["residual_income"] = {"error": str(e), "model": "Residual Income Model"}
 
     # ── Composite Verdict ─────────────────────────────────────────────────────
     verdicts = []

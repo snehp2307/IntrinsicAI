@@ -791,6 +791,200 @@ def merton_distance_to_default(
         return {**result, "error": str(e), "color": "grey", "risk": "N/A"}
 
 
+# ── 11. Graham Number ─────────────────────────────────────────────────────────
+
+def graham_number(
+    earnings_per_share: float,
+    book_value_per_share: float,
+    current_price: float = None,
+) -> dict:
+    """
+    Benjamin Graham's intrinsic value formula.
+    Graham Number = √(22.5 × EPS × BVPS)
+
+    Represents the maximum price a defensive investor should pay.
+    """
+    result = {"model": "Graham Number"}
+
+    if earnings_per_share <= 0:
+        return {**result, "error": "EPS must be positive for Graham Number.",
+                "color": "grey", "risk": "N/A"}
+    if book_value_per_share <= 0:
+        return {**result, "error": "Book Value per share must be positive.",
+                "color": "grey", "risk": "N/A"}
+
+    import math
+    gn = math.sqrt(22.5 * earnings_per_share * book_value_per_share)
+
+    result.update({
+        "graham_number": round(gn, 2),
+        "eps": round(earnings_per_share, 2),
+        "bvps": round(book_value_per_share, 2),
+        "formula": "√(22.5 × EPS × BVPS)",
+    })
+
+    if current_price and current_price > 0:
+        margin = (gn - current_price) / current_price * 100
+        result["current_price"] = round(current_price, 2)
+        result["margin_of_safety"] = round(margin, 1)
+        if margin > 20:
+            result.update({"valuation": "Undervalued", "color": "green", "risk": "Low",
+                           "interpretation": f"CMP ₹{current_price:.0f} is {margin:.0f}% below Graham Number ₹{gn:.0f}. Strong margin of safety."})
+        elif margin > -10:
+            result.update({"valuation": "Fairly Valued", "color": "amber", "risk": "Moderate",
+                           "interpretation": f"CMP ₹{current_price:.0f} is near Graham Number ₹{gn:.0f}. Fair pricing."})
+        else:
+            result.update({"valuation": "Overvalued", "color": "red", "risk": "High",
+                           "interpretation": f"CMP ₹{current_price:.0f} is {abs(margin):.0f}% above Graham Number ₹{gn:.0f}. No margin of safety."})
+    else:
+        result.update({"color": "blue", "valuation": "Computed", "risk": "N/A",
+                       "interpretation": f"Graham Number: ₹{gn:.2f} per share."})
+
+    result["components"] = {
+        "EPS": round(earnings_per_share, 2),
+        "BVPS": round(book_value_per_share, 2),
+        "Graham Multiplier": 22.5,
+        "Graham Number": round(gn, 2),
+    }
+    return result
+
+
+# ── 12. P/E Relative Valuation ────────────────────────────────────────────────
+
+def pe_relative_valuation(
+    earnings_per_share: float,
+    current_price: float,
+    sector_pe: float = 20.0,
+    market_pe: float = 22.0,
+) -> dict:
+    """
+    Price-to-Earnings relative valuation.
+    Compares company P/E to sector and market averages.
+    Fair Value = EPS × Sector P/E
+    """
+    result = {"model": "P/E Relative Valuation"}
+
+    if earnings_per_share <= 0:
+        return {**result, "error": "EPS must be positive for P/E valuation.",
+                "color": "grey", "risk": "N/A"}
+    if current_price <= 0:
+        return {**result, "error": "Current price must be positive.",
+                "color": "grey", "risk": "N/A"}
+
+    company_pe = current_price / earnings_per_share
+    fair_value = earnings_per_share * sector_pe
+    pe_premium = (company_pe / sector_pe - 1) * 100
+    margin = (fair_value - current_price) / current_price * 100
+
+    result.update({
+        "pe_ratio": round(company_pe, 2),
+        "sector_pe": round(sector_pe, 2),
+        "market_pe": round(market_pe, 2),
+        "fair_value": round(fair_value, 2),
+        "pe_premium_discount": round(pe_premium, 1),
+        "margin_of_safety": round(margin, 1),
+        "formula": "Fair Value = EPS × Sector P/E",
+    })
+
+    if company_pe < sector_pe * 0.75:
+        result.update({"valuation": "Undervalued", "color": "green", "risk": "Low",
+                       "interpretation": f"P/E of {company_pe:.1f}x is {abs(pe_premium):.0f}% below sector avg {sector_pe:.1f}x. Potentially undervalued."})
+    elif company_pe < sector_pe * 1.25:
+        result.update({"valuation": "Fairly Valued", "color": "amber", "risk": "Moderate",
+                       "interpretation": f"P/E of {company_pe:.1f}x is roughly in line with sector avg {sector_pe:.1f}x."})
+    else:
+        result.update({"valuation": "Overvalued", "color": "red", "risk": "High",
+                       "interpretation": f"P/E of {company_pe:.1f}x is {pe_premium:.0f}% above sector avg {sector_pe:.1f}x. Richly valued."})
+
+    result["components"] = {
+        "Company P/E": round(company_pe, 2),
+        "Sector P/E": round(sector_pe, 2),
+        "Market P/E": round(market_pe, 2),
+        "EPS": round(earnings_per_share, 2),
+        "Fair Value": round(fair_value, 2),
+    }
+    return result
+
+
+# ── 13. Residual Income Model ─────────────────────────────────────────────────
+
+def residual_income_model(
+    book_value_per_share: float,
+    roe: float,
+    cost_of_equity: float,
+    growth_rate: float = 0.03,
+    current_price: float = None,
+    forecast_years: int = 5,
+) -> dict:
+    """
+    Residual Income Valuation (Edwards-Bell-Ohlson).
+    IV = BVPS + Σ(Residual Income_t / (1+r)^t) + Terminal RI
+
+    Residual Income = (ROE - Cost of Equity) × Book Value
+    """
+    result = {"model": "Residual Income Model"}
+
+    if book_value_per_share <= 0:
+        return {**result, "error": "Book value per share must be positive.",
+                "color": "grey", "risk": "N/A"}
+    if cost_of_equity <= growth_rate:
+        growth_rate = cost_of_equity - 0.01
+
+    spread = roe - cost_of_equity  # Economic profit spread
+    bv = book_value_per_share
+    pv_ri_total = 0.0
+
+    for yr in range(1, forecast_years + 1):
+        ri = spread * bv
+        pv_ri = ri / ((1 + cost_of_equity) ** yr)
+        pv_ri_total += pv_ri
+        bv = bv * (1 + growth_rate)  # BV grows
+
+    # Terminal residual income (perpetuity)
+    terminal_ri = (spread * bv * (1 + growth_rate)) / (cost_of_equity - growth_rate)
+    pv_terminal = terminal_ri / ((1 + cost_of_equity) ** forecast_years)
+
+    intrinsic_value = book_value_per_share + pv_ri_total + pv_terminal
+
+    result.update({
+        "intrinsic_value": round(intrinsic_value, 2),
+        "book_value": round(book_value_per_share, 2),
+        "pv_residual_income": round(pv_ri_total, 2),
+        "pv_terminal_ri": round(pv_terminal, 2),
+        "roe": round(roe * 100, 2),
+        "cost_of_equity": round(cost_of_equity * 100, 2),
+        "economic_spread": round(spread * 100, 2),
+        "formula": "IV = BVPS + Σ(RI_t/(1+r)^t) + Terminal RI",
+    })
+
+    if current_price and current_price > 0:
+        margin = (intrinsic_value - current_price) / current_price * 100
+        result["current_price"] = round(current_price, 2)
+        result["margin_of_safety"] = round(margin, 1)
+        if margin > 15:
+            result.update({"valuation": "Undervalued", "color": "green", "risk": "Low",
+                           "interpretation": f"RI intrinsic value ₹{intrinsic_value:.0f} vs CMP ₹{current_price:.0f}. {margin:.0f}% upside."})
+        elif margin > -10:
+            result.update({"valuation": "Fairly Valued", "color": "amber", "risk": "Moderate",
+                           "interpretation": f"RI intrinsic value ₹{intrinsic_value:.0f} is close to CMP ₹{current_price:.0f}."})
+        else:
+            result.update({"valuation": "Overvalued", "color": "red", "risk": "High",
+                           "interpretation": f"RI intrinsic value ₹{intrinsic_value:.0f} is {abs(margin):.0f}% below CMP ₹{current_price:.0f}."})
+    else:
+        result.update({"color": "blue", "valuation": "Computed", "risk": "N/A",
+                       "interpretation": f"Residual Income intrinsic value: ₹{intrinsic_value:.2f}."})
+
+    result["components"] = {
+        "Book Value/Share": round(book_value_per_share, 2),
+        "ROE": f"{roe*100:.1f}%",
+        "Cost of Equity": f"{cost_of_equity*100:.1f}%",
+        "Economic Spread": f"{spread*100:.1f}%",
+        "PV Residual Income": round(pv_ri_total, 2),
+        "PV Terminal RI": round(pv_terminal, 2),
+    }
+    return result
+
+
 # ── Run All Available Models ──────────────────────────────────────────────────
 
 def run_quick_valuation(inputs: dict) -> dict:
