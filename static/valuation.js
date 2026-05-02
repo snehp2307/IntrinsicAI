@@ -116,17 +116,32 @@ async function runFullAnalysis(useOverrides = false) {
 
     updateCompanyBar(mkt);
 
-    // Show notice if using default assumptions (no detailed financials)
-    if (mkt.is_stub) {
-      const bar = document.getElementById("companyBar");
-      const existing = bar.querySelector(".stub-notice");
-      if (!existing) {
-        bar.insertAdjacentHTML("beforeend",
-          `<div class="stub-notice" style="width:100%;margin-top:6px;padding:6px 10px;border-radius:6px;background:rgba(59,130,246,.12);color:#93c5fd;font-size:.78rem;">
-            <i class="fas fa-info-circle me-1"></i>
-            Using sector-default assumptions — override in the Assumptions panel below for accurate valuation.
-          </div>`);
-      }
+    // Show data source notice
+    const dataSource = mkt.financials?.data_source || (mkt.is_stub ? 'sector_default' : 'unknown');
+    const bar = document.getElementById("companyBar");
+    const existingNotice = bar.querySelector(".data-source-notice");
+    if (existingNotice) existingNotice.remove();
+
+    const sourceConfig = {
+      company_specific: { bg: 'rgba(34,197,94,.12)', color: '#86efac', icon: 'fa-check-circle', text: 'Using curated company-specific financial data.' },
+      yfinance_live:    { bg: 'rgba(59,130,246,.12)', color: '#93c5fd', icon: 'fa-chart-line',   text: 'Using live financial statements from yfinance.' },
+      sector_default:   { bg: 'rgba(239,68,68,.15)',  color: '#fca5a5', icon: 'fa-exclamation-triangle', text: '⚠ Using sector-default assumptions — NOT company-specific. Override in Assumptions panel.' },
+      unknown:          { bg: 'rgba(148,163,184,.12)', color: '#94a3b8', icon: 'fa-question-circle', text: 'Data source unverified.' },
+    };
+    const sc = sourceConfig[dataSource] || sourceConfig.unknown;
+    bar.insertAdjacentHTML("beforeend",
+      `<div class="data-source-notice" style="width:100%;margin-top:6px;padding:6px 10px;border-radius:6px;background:${sc.bg};color:${sc.color};font-size:.78rem;">
+        <i class="fas ${sc.icon} me-1"></i>${sc.text}
+      </div>`);
+
+    // Show data warnings if any
+    const dataWarnings = mkt.financials?.data_warnings || [];
+    if (dataWarnings.length > 0) {
+      const existingWarns = bar.querySelector(".data-warnings");
+      if (existingWarns) existingWarns.remove();
+      const warnsHtml = dataWarnings.map(w => `<div style="font-size:.72rem;opacity:.8">• ${w}</div>`).join('');
+      bar.insertAdjacentHTML("beforeend",
+        `<div class="data-warnings" style="width:100%;margin-top:3px;padding:4px 10px;font-size:.72rem;color:#94a3b8">${warnsHtml}</div>`);
     }
 
     // Build DCF payload (merge dataset defaults with user overrides if any)
@@ -189,6 +204,7 @@ function buildPayload(mkt, wacc, useOverrides) {
 // ── Render all results ────────────────────────────────────────────────────────
 function renderResults(dcf, sc, rd) {
   renderKPIs(dcf);
+  renderDCFBreakdown(dcf);
   renderFCFChart(dcf);
   renderHistoryChart(_marketData);
   renderDriversChart(dcf);
@@ -223,6 +239,63 @@ function renderKPIs(dcf) {
 
   const mosEl = document.getElementById("kpiMoS");
   mosEl.className = "val-kpi-value " + (mos > 0 ? "verdict-undervalued" : mos < -5 ? "verdict-overvalued" : "verdict-fair");
+
+  // Confidence score
+  const confEl = document.getElementById("kpiConfidence");
+  if (confEl) {
+    const conf = dcf.confidence_score || 0;
+    confEl.textContent = conf + '/100';
+    confEl.className = 'val-kpi-value ' + (conf >= 70 ? 'verdict-undervalued' : conf >= 40 ? 'verdict-fair' : 'verdict-overvalued');
+  }
+
+  // Data source badge
+  const srcEl = document.getElementById("kpiDataSource");
+  if (srcEl) {
+    const src = dcf.data_source || 'unknown';
+    const srcLabels = { company_specific: 'Company Data', yfinance_live: 'yFinance Live', sector_default: 'Sector Default ⚠', manual: 'Manual', unknown: 'Unverified' };
+    const srcColors = { company_specific: '#22c55e', yfinance_live: '#3b82f6', sector_default: '#ef4444', manual: '#f59e0b', unknown: '#6b7280' };
+    srcEl.textContent = srcLabels[src] || src;
+    srcEl.style.color = srcColors[src] || '#6b7280';
+  }
+}
+
+// ── DCF Breakdown Table ───────────────────────────────────────────────────────
+function renderDCFBreakdown(dcf) {
+  const el = document.getElementById('dcfBreakdownBody');
+  if (!el) return;
+  const inp = dcf.inputs || {};
+  const src = dcf.data_source || 'unknown';
+  const srcBadge = src === 'sector_default'
+    ? '<span style="color:#ef4444;font-size:.68rem"> ⚠ Default</span>'
+    : src === 'yfinance_live'
+    ? '<span style="color:#3b82f6;font-size:.68rem"> ● Live</span>'
+    : src === 'company_specific'
+    ? '<span style="color:#22c55e;font-size:.68rem"> ✓ Verified</span>'
+    : '';
+
+  const rows = [
+    ['Net Income (₹ Cr)',         fmt(inp.net_income),           'From income statement' + srcBadge],
+    ['+ Depreciation (₹ Cr)',     fmt(inp.depreciation),         'Non-cash charge added back'],
+    ['+ Amortization (₹ Cr)',     fmt(inp.amortization),         'Non-cash charge added back'],
+    ['− Capex (₹ Cr)',            fmt(inp.capex),                'Maintenance + growth capex'],
+    ['− WC Change (₹ Cr)',        fmt(inp.working_capital_change),'Change in working capital'],
+    ['= Owner Earnings (₹ Cr)',   fmt(dcf.owner_earnings),       '<strong>Base FCF for projection</strong>'],
+    ['Revenue Growth (CAGR)',     ((inp.revenue_growth_rate||0)*100).toFixed(1)+'%', 'Declining to terminal rate'],
+    ['Operating Margin',          ((inp.operating_margin||0)*100).toFixed(1)+'%',    'EBIT / Revenue'],
+    ['Tax Rate',                  ((inp.tax_rate||0)*100).toFixed(1)+'%',            'Effective tax rate'],
+    ['WACC',                      ((inp.wacc||0)*100).toFixed(1)+'%',               'Cost of capital'],
+    ['Terminal Growth',           ((inp.terminal_growth_rate||0)*100).toFixed(1)+'%','Long-run GDP proxy'],
+    ['Reinvestment Rate',         ((inp.reinvestment_rate||0)*100).toFixed(1)+'%',   'Growth reinvestment'],
+    ['Σ PV of FCFs (₹ Cr)',       '₹'+fmt(dcf.pv_fcfs),          'Sum of discounted cash flows'],
+    ['Terminal Value (₹ Cr)',     '₹'+fmt(dcf.terminal_value),    'Gordon Growth perpetuity'],
+    ['PV Terminal (₹ Cr)',        '₹'+fmt(dcf.pv_terminal_value), 'Discounted terminal value'],
+    ['Enterprise Value (₹ Cr)',   '₹'+fmt(dcf.enterprise_value),  'PV FCFs + PV Terminal'],
+    ['− Net Debt (₹ Cr)',         '₹'+fmt(inp.net_debt),          'Total debt − cash'],
+    ['Equity Value (₹ Cr)',       '₹'+fmt(dcf.equity_value),      'EV − Net Debt'],
+    ['÷ Shares (Mn)',             fmt(inp.shares_outstanding),     'Shares outstanding'],
+    ['<strong>Intrinsic Value/Share</strong>', '<strong>₹'+fmt(dcf.intrinsic_value_per_share)+'</strong>', '<strong>Equity ÷ Shares</strong>'],
+  ];
+  el.innerHTML = rows.map(r => `<tr><td style="color:#94a3b8">${r[0]}</td><td class="text-end" style="color:#e2e8f0;font-weight:500">${r[1]}</td><td style="font-size:.72rem;color:#64748b">${r[2]}</td></tr>`).join('');
 }
 
 // ── FCF Chart ─────────────────────────────────────────────────────────────────
@@ -381,6 +454,8 @@ async function fetchAIExplanation(dcf) {
     sensitivity:          xai.sensitivity || [],
     warnings:             dcf.warnings || [],
     projections_summary:  (dcf.projections || []).map(p => ({ year: p.year, fcf: p.fcf, growth: p.growth_rate })),
+    confidence_score:     dcf.confidence_score || 0,
+    data_source:          dcf.data_source || inputs.data_source || 'unknown',
   };
 
   // Debug: verify real data is flowing to API

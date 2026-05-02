@@ -170,29 +170,78 @@ def get_financials(symbol: str) -> Optional[dict]:
     """
     Return processed financial inputs suitable for DCF.
 
-    Data resolution order:
-      1. Detailed financials dataset (5 companies with multi-year history)
-      2. NIFTY 500 directory stub (300+ companies — uses defaults + yfinance)
+    Data resolution order (with data_source attribution):
+      1. Detailed financials dataset (5 companies with multi-year history) → "company_specific"
+      2. yfinance live financial extraction (income stmt + balance sheet + CF) → "yfinance_live"
+      3. NIFTY 500 directory stub (300+ companies — sector defaults) → "sector_default" ⚠️
 
-    For companies in the directory but without detailed financials,
-    returns a minimal stub with sensible DCF defaults so the pipeline
-    can run using live yfinance market prices.
+    Every returned dict includes:
+      - data_source:   "company_specific" | "yfinance_live" | "sector_default"
+      - data_warnings: list of strings about data quality
     """
+    data_warnings = []
+
     # ── Attempt 1: detailed financials dataset ────────────────────────────────
     data = get_company_info(symbol)
     if data:
         fin = data.get("financials", [])
         if fin:
-            return _build_financials_from_dataset(symbol, data, fin)
+            result = _build_financials_from_dataset(symbol, data, fin)
+            result["data_source"] = "company_specific"
+            result["data_warnings"] = ["Using curated multi-year financial data."]
+            result["_stub"] = False
+            return result
 
-    # ── Attempt 2: NIFTY 500 directory stub ──────────────────────────────────
+    # ── Attempt 2: yfinance live financial extraction ─────────────────────────
+    from .market_data import fetch_yf_financials
     dir_entry = get_directory_entry(symbol)
+
+    yf_fin = fetch_yf_financials(symbol, exchange=(dir_entry or {}).get("exchange", "NSE"))
+    if yf_fin and yf_fin.get("net_income", 0) != 0:
+        log.info("Using yfinance live financials for %s", symbol)
+        # Merge directory info if available
+        if dir_entry:
+            yf_fin.setdefault("company_name", dir_entry.get("company_name", symbol))
+            yf_fin.setdefault("sector", dir_entry.get("sector", yf_fin.get("sector", "")))
+            yf_fin.setdefault("token", dir_entry.get("token", ""))
+
+        # Build data quality warnings
+        warnings = []
+        if not yf_fin.get("revenue_cagr_available"):
+            warnings.append("Revenue CAGR estimated — insufficient historical data from yfinance.")
+        if not yf_fin.get("operating_margin_computed"):
+            warnings.append("Operating margin estimated — EBIT data incomplete.")
+        if not yf_fin.get("tax_rate_computed"):
+            warnings.append("Tax rate using default 25% — actual tax data unavailable.")
+        if yf_fin.get("net_income", 0) < 0:
+            warnings.append("Negative net income — DCF model reliability is limited for loss-making companies.")
+        if not warnings:
+            warnings.append("Using live financial statements from yfinance.")
+
+        yf_fin["data_source"] = "yfinance_live"
+        yf_fin["data_warnings"] = warnings
+        yf_fin["_stub"] = False
+        return yf_fin
+
+    # ── Attempt 3: NIFTY 500 directory stub ──────────────────────────────────
+    if not dir_entry:
+        dir_entry = get_directory_entry(symbol)
+
     if dir_entry:
         log.info("Using directory stub for %s (no detailed financials)", symbol)
-        return _build_stub_financials(symbol, dir_entry)
+        result = _build_stub_financials(symbol, dir_entry)
+        result["data_source"] = "sector_default"
+        result["data_warnings"] = [
+            f"⚠ Using sector-default assumptions for {dir_entry.get('sector', 'this sector')}.",
+            "These are NOT company-specific financials. Override in the Assumptions panel for accurate valuation.",
+            "Net income, capex, and other inputs are sector averages — actual company financials may differ significantly.",
+        ]
+        result["_stub"] = True
+        return result
 
-    # Not found in either source
+    # Not found in any source
     return None
+
 
 
 def _build_financials_from_dataset(symbol: str, data: dict, fin: list) -> dict:

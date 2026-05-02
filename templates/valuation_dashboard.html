@@ -164,7 +164,7 @@
   <div id="resultsSection" class="d-none">
 
     <div class="row g-3 mb-4">
-      <div class="col-6 col-md-3">
+      <div class="col-6 col-md-2">
         <div class="card val-kpi-card text-center">
           <div class="card-body">
             <div class="val-kpi-label">Intrinsic Value</div>
@@ -172,7 +172,7 @@
           </div>
         </div>
       </div>
-      <div class="col-6 col-md-3">
+      <div class="col-6 col-md-2">
         <div class="card val-kpi-card text-center">
           <div class="card-body">
             <div class="val-kpi-label">Market Price</div>
@@ -180,7 +180,7 @@
           </div>
         </div>
       </div>
-      <div class="col-6 col-md-3">
+      <div class="col-6 col-md-2">
         <div class="card val-kpi-card text-center">
           <div class="card-body">
             <div class="val-kpi-label">Margin of Safety</div>
@@ -188,11 +188,57 @@
           </div>
         </div>
       </div>
-      <div class="col-6 col-md-3">
+      <div class="col-6 col-md-2">
         <div class="card val-kpi-card text-center">
           <div class="card-body">
             <div class="val-kpi-label">Verdict</div>
             <div class="val-kpi-value" id="kpiVerdict">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card val-kpi-card text-center">
+          <div class="card-body">
+            <div class="val-kpi-label">Confidence</div>
+            <div class="val-kpi-value" id="kpiConfidence">—</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-md-2">
+        <div class="card val-kpi-card text-center">
+          <div class="card-body">
+            <div class="val-kpi-label">Data Source</div>
+            <div class="val-kpi-value" id="kpiDataSource" style="font-size:.85rem">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- DCF Breakdown Table -->
+    <div class="row g-3 mb-4">
+      <div class="col-12">
+        <div class="card" style="border-color:#1e3a5f">
+          <div class="card-header small fw-semibold d-flex align-items-center justify-content-between"
+               style="background:linear-gradient(135deg,#0c1929,#132f4c);border-bottom:1px solid #1e3a5f">
+            <span>
+              <i class="fas fa-calculator me-2 text-info"></i>
+              DCF Valuation Breakdown
+              <span class="text-info ms-1" style="font-size:.7rem;opacity:.7">Formula Transparency</span>
+            </span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm val-table mb-0">
+                <thead>
+                  <tr>
+                    <th class="text-start" style="width:35%">Component</th>
+                    <th class="text-end" style="width:25%">Value</th>
+                    <th style="width:40%">Formula / Source</th>
+                  </tr>
+                </thead>
+                <tbody id="dcfBreakdownBody"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </div>

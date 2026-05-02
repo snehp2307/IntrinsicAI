@@ -302,6 +302,265 @@ def get_historical_prices(symbol: str, exchange: str = "NSE",
     return []
 
 
+# ── yfinance Financial Data Extraction ────────────────────────────────────
+
+_FIN_CACHE: dict = {}
+_FIN_CACHE_TTL = 3600  # 1 hour for financial data
+
+def fetch_yf_financials(symbol: str, exchange: str = "NSE") -> Optional[dict]:
+    """
+    Extract real company financials from yfinance:
+      - Income statement (revenue, net income, EBIT, depreciation)
+      - Balance sheet (assets, liabilities, cash, debt, equity, shares)
+      - Cash flow (operating CF, capex, FCF)
+      - Historical growth rates (CAGR)
+
+    Returns dict suitable for DCF inputs, or None on failure.
+    Cached for 1 hour.
+    """
+    cache_key = f"fin:{symbol.upper()}:{exchange.upper()}"
+    now = time.time()
+
+    cached = _FIN_CACHE.get(cache_key)
+    if cached and (now - cached.get("_ts", 0)) < _FIN_CACHE_TTL:
+        log.debug("Financial cache hit for %s", symbol)
+        result = {k: v for k, v in cached.items() if k != "_ts"}
+        return result
+
+    if not _YF_AVAILABLE:
+        return None
+
+    skip_yf = os.environ.get("SKIP_YFINANCE", "").strip().lower()
+    if skip_yf in ("1", "true", "yes"):
+        return None
+
+    import math
+    from concurrent.futures import ThreadPoolExecutor, TimeoutError as FTE
+
+    def _do_fetch():
+        yf_sym = _yf_symbol(symbol, exchange)
+        ticker = yf.Ticker(yf_sym)
+
+        # Fetch financial statements
+        inc = ticker.income_stmt        # columns = fiscal years
+        bs  = ticker.balance_sheet
+        cf  = ticker.cashflow
+        info = ticker.info or {}
+
+        return inc, bs, cf, info, yf_sym
+
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_do_fetch)
+            try:
+                inc, bs, cf, info, yf_sym = future.result(timeout=15)
+            except FTE:
+                log.warning("yfinance financial fetch timeout (15s) for %s", symbol)
+                return None
+
+        if inc is None or inc.empty:
+            log.debug("No income statement data for %s", symbol)
+            return None
+
+        # ── Helper to safely extract a value from a DataFrame ─────────
+        def _get(df, labels, col_idx=0, default=0.0):
+            """Try multiple label names (yfinance labels vary by company)."""
+            if df is None or df.empty:
+                return default
+            for label in labels:
+                if label in df.index:
+                    try:
+                        val = df.iloc[df.index.get_loc(label), col_idx]
+                        if val is not None and not (isinstance(val, float) and math.isnan(val)):
+                            return float(val)
+                    except Exception:
+                        continue
+            return default
+
+        def _get_all_years(df, labels):
+            """Get values across all available years for CAGR."""
+            if df is None or df.empty:
+                return []
+            for label in labels:
+                if label in df.index:
+                    try:
+                        vals = []
+                        for i in range(len(df.columns)):
+                            v = df.iloc[df.index.get_loc(label), i]
+                            if v is not None and not (isinstance(v, float) and math.isnan(v)):
+                                vals.append(float(v))
+                        return vals
+                    except Exception:
+                        continue
+            return []
+
+        # ── Extract from Income Statement (₹ in actual units from yfinance) ──
+        # yfinance returns values in the company's reporting currency (₹ for Indian stocks)
+        # Values are typically in raw units, need to convert to crores for Indian stocks
+        scale = 1e7  # 1 Cr = 10 million = 1e7
+
+        revenue     = _get(inc, ["Total Revenue", "Revenue", "Operating Revenue"]) / scale
+        net_income  = _get(inc, ["Net Income", "Net Income Common Stockholders",
+                                  "Net Income From Continuing Operations"]) / scale
+        ebit        = _get(inc, ["EBIT", "Operating Income", "Operating Profit"]) / scale
+        depreciation = _get(inc, ["Depreciation And Amortization", "Depreciation",
+                                   "Reconciled Depreciation"]) / scale
+        tax_expense = _get(inc, ["Tax Provision", "Income Tax Expense", "Tax Expense"]) / scale
+
+        # ── Extract from Balance Sheet ────────────────────────────────
+        total_assets   = _get(bs, ["Total Assets"]) / scale
+        total_liab     = _get(bs, ["Total Liabilities Net Minority Interest",
+                                    "Total Liab", "Total Non Current Liabilities Net Minority Interest"]) / scale
+        cash           = _get(bs, ["Cash And Cash Equivalents", "Cash Cash Equivalents And Short Term Investments",
+                                    "Cash Financial"]) / scale
+        total_debt     = _get(bs, ["Total Debt", "Long Term Debt", "Long Term Debt And Capital Lease Obligation"]) / scale
+        equity         = _get(bs, ["Total Equity Gross Minority Interest", "Stockholders Equity",
+                                    "Common Stock Equity"]) / scale
+        current_assets = _get(bs, ["Current Assets"]) / scale
+        current_liab   = _get(bs, ["Current Liabilities"]) / scale
+        working_capital = current_assets - current_liab
+
+        # Previous year working capital for WC change
+        wc_prev = 0.0
+        if bs is not None and len(bs.columns) > 1:
+            ca_prev = _get(bs, ["Current Assets"], col_idx=1) / scale
+            cl_prev = _get(bs, ["Current Liabilities"], col_idx=1) / scale
+            wc_prev = ca_prev - cl_prev
+
+        wc_change = working_capital - wc_prev
+
+        # ── Extract from Cash Flow Statement ──────────────────────────
+        operating_cf = _get(cf, ["Operating Cash Flow", "Cash Flow From Continuing Operating Activities",
+                                  "Total Cash From Operating Activities"]) / scale
+        capex        = abs(_get(cf, ["Capital Expenditure", "Purchase Of Property Plant And Equipment",
+                                      "Capital Expenditures"])) / scale
+        fcf_reported = _get(cf, ["Free Cash Flow"]) / scale
+
+        # ── Shares outstanding ────────────────────────────────────────
+        shares_outstanding = info.get("sharesOutstanding", 0)
+        if shares_outstanding:
+            shares_outstanding = shares_outstanding / 1e6  # Convert to millions
+        else:
+            shares_outstanding = _get(bs, ["Share Issued", "Ordinary Shares Number"]) / 1e6
+        if shares_outstanding <= 0:
+            shares_outstanding = 1.0
+
+        # ── Calculate historical growth (CAGR) ────────────────────────
+        rev_history = _get_all_years(inc, ["Total Revenue", "Revenue", "Operating Revenue"])
+        ni_history  = _get_all_years(inc, ["Net Income", "Net Income Common Stockholders"])
+
+        def _cagr(vals):
+            """CAGR from most recent (idx 0) to oldest. Clamp to [-20%, +50%]."""
+            if len(vals) < 2:
+                return None
+            newest, oldest = vals[0], vals[-1]
+            if oldest <= 0 or newest <= 0:
+                return None
+            n = len(vals) - 1
+            try:
+                rate = (newest / oldest) ** (1 / n) - 1
+                return round(max(min(rate, 0.50), -0.20), 4)
+            except Exception:
+                return None
+
+        revenue_cagr    = _cagr(rev_history)
+        net_income_cagr = _cagr(ni_history)
+
+        # ── Operating margin ──────────────────────────────────────────
+        op_margin = None
+        if revenue > 0 and ebit > 0:
+            op_margin = round(ebit / revenue, 4)
+        elif revenue > 0 and net_income > 0:
+            op_margin = round(net_income / revenue * 1.2, 4)  # rough pre-tax proxy
+
+        # ── Tax rate from actual data ─────────────────────────────────
+        pretax_income = _get(inc, ["Pretax Income", "Income Before Tax"]) / scale
+        actual_tax_rate = None
+        if pretax_income > 0 and tax_expense > 0:
+            actual_tax_rate = round(tax_expense / pretax_income, 4)
+
+        # ── Net debt ──────────────────────────────────────────────────
+        net_debt = total_debt - cash
+
+        # ── Validate — reject if all zeros (yfinance returned empty structure) ──
+        if revenue <= 0 and net_income <= 0 and total_assets <= 0:
+            log.info("yfinance returned empty financials for %s", symbol)
+            return None
+
+        # ── Build historical entries for chart ────────────────────────
+        history = []
+        if inc is not None:
+            for i, col in enumerate(inc.columns[:5]):
+                try:
+                    yr = col.year if hasattr(col, 'year') else str(col)[:4]
+                    history.append({
+                        "year":          int(yr) if isinstance(yr, (int, float)) else yr,
+                        "revenue":       round(_get(inc, ["Total Revenue", "Revenue"], i) / scale, 2),
+                        "net_income":    round(_get(inc, ["Net Income", "Net Income Common Stockholders"], i) / scale, 2),
+                        "ebit":          round(_get(inc, ["EBIT", "Operating Income"], i) / scale, 2),
+                        "free_cash_flow": round(_get(cf, ["Free Cash Flow"], i) / scale, 2) if cf is not None and not cf.empty else 0,
+                    })
+                except Exception:
+                    continue
+
+        result = {
+            "symbol":               symbol.upper(),
+            "exchange":             exchange.upper(),
+            "data_source":          "yfinance_live",
+
+            # Income statement
+            "net_income":           round(net_income, 2),
+            "depreciation":         round(depreciation, 2) if depreciation > 0 else round(revenue * 0.04, 2),
+            "amortization":         round(depreciation * 0.1, 2),
+            "revenue":              round(revenue, 2),
+            "ebit":                 round(ebit, 2),
+
+            # Cash flow
+            "capex":                round(capex, 2) if capex > 0 else round(revenue * 0.05, 2),
+            "operating_cash_flow":  round(operating_cf, 2),
+            "free_cash_flow":       round(fcf_reported if fcf_reported else (operating_cf - capex), 2),
+            "working_capital_change": round(wc_change, 2),
+
+            # Balance sheet
+            "total_assets":         round(total_assets, 2),
+            "total_liabilities":    round(total_liab, 2),
+            "cash":                 round(cash, 2),
+            "total_debt":           round(total_debt, 2),
+            "equity":               round(equity, 2),
+            "current_assets":       round(current_assets, 2),
+            "current_liabilities":  round(current_liab, 2),
+            "net_debt":             round(net_debt, 2),
+
+            # Computed
+            "shares_outstanding":   round(shares_outstanding, 2),
+            "revenue_growth_rate":  revenue_cagr if revenue_cagr is not None else 0.08,
+            "operating_margin":     op_margin if op_margin is not None else 0.12,
+            "tax_rate":             actual_tax_rate if actual_tax_rate is not None else 0.25,
+
+            # Growth flags
+            "revenue_cagr_available":    revenue_cagr is not None,
+            "operating_margin_computed": op_margin is not None,
+            "tax_rate_computed":         actual_tax_rate is not None,
+
+            # History
+            "history":              history,
+
+            # Company info from yfinance
+            "company_name":         info.get("longName", info.get("shortName", symbol)),
+            "sector":               info.get("sector", ""),
+            "industry":             info.get("industry", ""),
+        }
+
+        _FIN_CACHE[cache_key] = {**result, "_ts": time.time()}
+        log.info("yfinance financials for %s: Revenue=%.0f Cr, NI=%.0f Cr, FCF=%.0f Cr, Shares=%.1fM",
+                 symbol, revenue, net_income, result["free_cash_flow"], shares_outstanding)
+        return result
+
+    except Exception as e:
+        log.warning("yfinance financial extraction failed for %s: %s", symbol, e)
+        return None
+
+
 # ── Market cap estimate ───────────────────────────────────────────────────────
 
 def get_market_data(symbol: str, shares_outstanding: float = 1.0,

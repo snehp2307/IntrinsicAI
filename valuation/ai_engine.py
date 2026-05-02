@@ -74,6 +74,18 @@ def _build_prompt(data: dict) -> str:
     margin       = data.get("operating_margin", 0)
     fcf          = data.get("free_cash_flow", 0)
     net_debt     = data.get("net_debt", 0)
+    confidence   = data.get("confidence_score", 0)
+    data_source  = data.get("data_source", "unknown")
+
+    # Data source description
+    source_desc = {
+        "company_specific": "Curated multi-year company financial statements",
+        "yfinance_live":    "Live financial data extracted from yfinance (income statement, balance sheet, cash flow)",
+        "sector_default":   "⚠ SECTOR-DEFAULT ASSUMPTIONS — NOT company-specific. These are generic sector averages.",
+        "manual":           "User-provided manual inputs",
+        "unknown":          "Data source unverified",
+    }
+    source_text = source_desc.get(data_source, "Unknown data source")
 
     # Sensitivity summary
     sensitivity_lines = ""
@@ -92,6 +104,11 @@ Analyze this Indian company valuation and produce a professional investment anal
 COMPANY: {company} ({symbol})
 SECTOR:  {sector}
 ═══════════════════════════════════════
+
+DATA QUALITY:
+  Source:              {source_text}
+  Confidence Score:    {confidence:.0f}/100
+  {"⚠ CRITICAL: The financial inputs below are sector averages, NOT real company data. Your analysis must prominently note this limitation." if data_source == "sector_default" else "Financial inputs are company-specific."}
 
 VALUATION SNAPSHOT:
   Current Market Price (CMP): ₹{cmp:,.2f}
@@ -117,9 +134,9 @@ MODEL WARNINGS:
 
 Generate a detailed equity research note covering:
 
-1. **Valuation Verdict** — Is this stock overvalued, undervalued, or fairly valued? By how much?
-2. **Market Mispricing** — Why might the market be mispricing this stock? What is the market embedding vs. your DCF?
-3. **Key Assumptions Scrutiny** — Are the DCF assumptions reasonable? Which ones are most aggressive?
+1. **Data Quality Assessment** — How reliable are the inputs? Are they company-specific or defaults?
+2. **Valuation Verdict** — Is this stock overvalued, undervalued, or fairly valued? By how much?
+3. **Key Assumptions Scrutiny** — Are the DCF assumptions reasonable for THIS specific company? Which ones seem aggressive or conservative?
 4. **Risk Factors** — What are the 3-4 biggest risks that could invalidate this valuation?
 5. **Long-Term Investor View** — What would Buffett or Damodaran say about this at current prices?
 6. **Actionable Summary** — One clear, confident paragraph for a long-term value investor.
@@ -129,7 +146,7 @@ FORMATTING RULES:
 - Use ₹ for all Indian currency values
 - Be specific with numbers — don't be vague
 - Write 250-400 words total
-- Write in professional but accessible language
+- If data_source is "sector_default", START with a prominent warning that the valuation uses generic sector assumptions
 - Do NOT use markdown code blocks or backticks
 """
 

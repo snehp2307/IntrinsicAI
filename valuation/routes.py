@@ -79,6 +79,8 @@ def _build_input(data: dict, market_price: float = 0.0) -> ValuationInput:
         current_price          = market_price or _fv(data, "current_price"),
         shares_outstanding     = _fv(data, "shares_outstanding",   1.0),
         net_debt               = _fv(data, "net_debt"),
+        data_source            = data.get("data_source", "unknown"),
+        data_warnings          = data.get("data_warnings"),
     )
 
 
@@ -301,28 +303,53 @@ def multi_model_route():
         market_price = _fv(data, "current_price")
         market_cap   = market_price * _fv(merged, "shares_outstanding", 1.0)
 
-    # ── Extract financial metrics ─────────────────────────────────────────────
+    # ── Extract financial metrics from real data ────────────────────────────
     net_income       = _fv(merged, "net_income", 0)
     depreciation     = _fv(merged, "depreciation", 0)
     capex            = _fv(merged, "capex", 0)
-    revenue          = net_income / max(_fv(merged, "operating_margin", 0.15), 0.01)
-    ebit             = net_income / 0.75  # Approximate pre-tax
+    revenue          = _fv(merged, "revenue", 0)
+    if revenue <= 0:
+        # Fallback: estimate revenue from net_income and margin
+        revenue = net_income / max(_fv(merged, "operating_margin", 0.15), 0.01)
+    ebit             = _fv(merged, "ebit", 0)
+    if ebit <= 0:
+        ebit = net_income / 0.75  # Approximate pre-tax
     ebitda           = ebit + depreciation
     net_debt         = _fv(merged, "net_debt", 0)
     shares           = _fv(merged, "shares_outstanding", 1.0)
-    total_assets     = max(revenue * 0.8, 1.0)  # Approximation
-    total_liabilities = max(net_debt, total_assets * 0.4)
-    equity           = max(total_assets - total_liabilities, 0.001)
-    working_capital  = max(total_assets * 0.2, 0.001)
-    current_liab     = total_liabilities * 0.4
-    current_assets   = working_capital + current_liab
-    cash             = max(total_assets * 0.05, 0.001)
+
+    # Use real balance sheet data if available (from yfinance extraction)
+    total_assets     = _fv(merged, "total_assets", 0)
+    total_liabilities = _fv(merged, "total_liabilities", 0)
+    equity           = _fv(merged, "equity", 0)
+    current_assets   = _fv(merged, "current_assets", 0)
+    current_liab     = _fv(merged, "current_liabilities", 0)
+    cash             = _fv(merged, "cash", 0)
+
+    # Fallback estimates only if real data is zero
+    if total_assets <= 0:
+        total_assets = max(revenue * 0.8, 1.0)
+    if total_liabilities <= 0:
+        total_liabilities = max(net_debt, total_assets * 0.4)
+    if equity <= 0:
+        equity = max(total_assets - total_liabilities, 0.001)
+    if current_assets <= 0:
+        working_capital = max(total_assets * 0.2, 0.001)
+        current_liab    = total_liabilities * 0.4
+        current_assets  = working_capital + current_liab
+    elif current_liab <= 0:
+        current_liab = total_liabilities * 0.4
+    if cash <= 0:
+        cash = max(total_assets * 0.05, 0.001)
+
+    working_capital  = current_assets - current_liab if current_assets > 0 else max(total_assets * 0.2, 0.001)
     retained_earnings = net_income * 3  # Approximation
-    fcf              = net_income + depreciation - capex
+    fcf              = _fv(merged, "free_cash_flow", 0) or (net_income + depreciation - capex)
     growth           = _fv(merged, "revenue_growth_rate", 0.10)
     margin           = _fv(merged, "operating_margin", 0.15)
     wacc             = _fv(merged, "wacc", 0.10)
     terminal_g       = _fv(merged, "terminal_growth_rate", 0.05)
+    data_source      = merged.get("data_source", "unknown")
 
     results = {}
     t0 = time.time()

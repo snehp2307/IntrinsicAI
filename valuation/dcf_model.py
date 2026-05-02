@@ -41,6 +41,10 @@ class ValuationInput:
 
     base_fcf_override:      Optional[float] = None
 
+    # Data provenance (not used in calculation, only for transparency)
+    data_source:            str   = "unknown"   # company_specific | yfinance_live | sector_default | manual
+    data_warnings:          Optional[List[str]] = None
+
 
 @dataclass
 class YearProjection:
@@ -66,6 +70,8 @@ class DCFResult:
     valuation_label:          str
     driver_weights:           dict
     warnings:                 List[str] = field(default_factory=list)
+    confidence_score:         float     = 0.0   # 0-100 based on data quality
+    data_source:              str       = "unknown"
 
 
 def compute_owner_earnings(inp: ValuationInput) -> float:
@@ -82,11 +88,19 @@ def _declining_growth(base: float, year: int, terminal: float, n: int) -> float:
 
 def _run_dcf_core(inp: ValuationInput) -> DCFResult:
     """Core DCF calculation WITHOUT computing driver weights (avoids recursion)."""
-    warnings = []
+    warnings = list(inp.data_warnings or [])
 
     if inp.wacc <= inp.terminal_growth_rate:
         warnings.append("WACC must exceed terminal growth rate. Adjusting.")
         inp = ValuationInput(**{**inp.__dict__, "terminal_growth_rate": inp.wacc - 0.005})
+
+    # Data source warnings
+    if inp.data_source == "sector_default":
+        warnings.append("⚠ Using sector-default assumptions — NOT company-specific financials. Override for accuracy.")
+    elif inp.data_source == "yfinance_live":
+        warnings.append("Using company-specific financial inputs from yfinance.")
+    elif inp.data_source == "company_specific":
+        warnings.append("Using curated company-specific financial data.")
 
     owner_earnings = compute_owner_earnings(inp)
     base_fcf = inp.base_fcf_override if inp.base_fcf_override is not None else owner_earnings
@@ -130,6 +144,9 @@ def _run_dcf_core(inp: ValuationInput) -> DCFResult:
     label = ("Undervalued" if mos > 0.15 else
              "Fairly Valued" if mos > -0.15 else "Overvalued")
 
+    # ── Confidence score (0-100) based on data quality ────────────────────
+    confidence = _compute_confidence(inp)
+
     return DCFResult(
         inputs=inp, owner_earnings=round(owner_earnings,4),
         projections=projections, pv_fcfs=round(pv_fcfs,4),
@@ -138,7 +155,49 @@ def _run_dcf_core(inp: ValuationInput) -> DCFResult:
         intrinsic_value_per_share=round(iv_per_share,4),
         margin_of_safety=round(mos,4), valuation_label=label,
         driver_weights={}, warnings=warnings,
+        confidence_score=confidence, data_source=inp.data_source,
     )
+
+
+def _compute_confidence(inp: ValuationInput) -> float:
+    """Estimate confidence (0-100) based on data quality and source."""
+    score = 0.0
+
+    # Base score from data source
+    source_scores = {
+        "company_specific": 75,
+        "yfinance_live":    65,
+        "manual":           50,
+        "sector_default":   20,
+        "unknown":          15,
+    }
+    score = source_scores.get(inp.data_source, 15)
+
+    # Bonus for having real financial inputs (not zeros/defaults)
+    if inp.net_income != 0:
+        score += 5
+    if inp.capex != 0:
+        score += 3
+    if inp.depreciation != 0:
+        score += 2
+    if inp.net_debt != 0:
+        score += 2
+    if inp.current_price > 0:
+        score += 5
+    if inp.shares_outstanding > 1:
+        score += 3
+
+    # Penalty for suspicious defaults
+    if inp.revenue_growth_rate == 0.10 and inp.operating_margin == 0.15:
+        score -= 10  # Likely using untouched defaults
+
+    # Penalty for extreme values
+    if inp.revenue_growth_rate > 0.40:
+        score -= 5
+    if inp.wacc < 0.05 or inp.wacc > 0.25:
+        score -= 5
+
+    return max(0, min(100, round(score, 0)))
 
 
 def run_dcf(inp: ValuationInput) -> DCFResult:
@@ -153,6 +212,7 @@ def run_dcf(inp: ValuationInput) -> DCFResult:
         intrinsic_value_per_share=result.intrinsic_value_per_share,
         margin_of_safety=result.margin_of_safety, valuation_label=result.valuation_label,
         driver_weights=driver_weights, warnings=result.warnings,
+        confidence_score=result.confidence_score, data_source=result.data_source,
     )
 
 
@@ -194,6 +254,8 @@ def dcf_to_dict(r: DCFResult) -> dict:
         "valuation_label":           r.valuation_label,
         "driver_weights":            r.driver_weights,
         "warnings":                  r.warnings,
+        "confidence_score":          r.confidence_score,
+        "data_source":               r.data_source,
         "inputs": {
             "net_income":             round(inp.net_income, 2),
             "depreciation":           round(inp.depreciation, 2),
@@ -210,6 +272,7 @@ def dcf_to_dict(r: DCFResult) -> dict:
             "current_price":          round(inp.current_price, 2),
             "shares_outstanding":     round(inp.shares_outstanding, 4),
             "net_debt":               round(inp.net_debt, 2),
+            "data_source":            inp.data_source,
         },
         "projections": [{
             "year":        p.year,
