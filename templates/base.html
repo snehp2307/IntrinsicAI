@@ -12,17 +12,15 @@
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet" />
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link
-    href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap"
-    rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
   <style>
     :root {
-      --bg-primary: #080e1a;
-      --bg-card: #0e1523;
-      --bg-hover: #1a2035;
-      --border: #1e2d3d;
-      --text: #e2e8f0;
+      --bg-primary: #060810;
+      --bg-card: #0c1019;
+      --bg-hover: #161c2a;
+      --border: #1a2030;
+      --text: #e4e8ef;
       --text-muted: #8892a4;
       --accent: #3b82f6;
     }
@@ -30,8 +28,9 @@
     body {
       background: var(--bg-primary);
       color: var(--text);
-      font-family: 'IBM Plex Sans', sans-serif;
+      font-family: 'Inter', 'IBM Plex Sans', system-ui, sans-serif;
       min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* Override Bootstrap card for dark theme */
@@ -63,12 +62,14 @@
       border-color: var(--accent);
     }
 
-    /* Navbar */
+    /* ── Navbar ──────────────────────────────────────────────── */
     .app-nav {
-      background: rgba(8, 14, 26, .92);
-      backdrop-filter: blur(12px);
-      border-bottom: 1px solid var(--border);
-      padding: .75rem 2rem;
+      background: rgba(6, 8, 16, .88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      padding: 0 clamp(1rem, 3vw, 2.5rem);
+      height: 58px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -82,34 +83,66 @@
       align-items: center;
       gap: .5rem;
       font-weight: 700;
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       text-decoration: none;
       color: var(--text);
+      letter-spacing: -.01em;
     }
 
-    .brand-icon {
-      color: var(--accent);
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      background: linear-gradient(135deg, #3b82f6, #818cf8);
+      border-radius: 2px;
+      transform: rotate(45deg);
     }
 
     .brand-accent {
-      color: var(--accent);
+      background: linear-gradient(135deg, #60a5fa, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
     }
 
     .nav-links {
       display: flex;
-      gap: 1.5rem;
+      align-items: center;
+      gap: .25rem;
     }
 
     .nav-links a {
       color: var(--text-muted);
       text-decoration: none;
-      font-size: .9rem;
-      transition: color .2s;
+      font-size: .84rem;
+      font-weight: 500;
+      padding: .4rem .75rem;
+      border-radius: 6px;
+      transition: color .2s, background .2s;
     }
 
     .nav-links a:hover,
     .nav-links a.active {
       color: var(--text);
+      background: rgba(255,255,255,.04);
+    }
+
+    .val-nav-btn {
+      background: linear-gradient(135deg, #3b82f6, #6366f1) !important;
+      color: #fff !important;
+      padding: .4rem .95rem !important;
+      border-radius: 8px !important;
+      font-weight: 600 !important;
+      font-size: .8rem !important;
+      letter-spacing: .02em;
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      transition: opacity .2s, transform .15s !important;
+    }
+
+    .val-nav-btn:hover {
+      opacity: .88 !important;
+      color: #fff !important;
+      transform: translateY(-1px) !important;
     }
 
     /* Page wrapper */
@@ -125,77 +158,43 @@
     }
 
     .flash-msg {
-      padding: .75rem 1rem;
+      padding: .7rem 1rem;
       border-radius: 8px;
       margin-bottom: .5rem;
-      font-size: .875rem;
+      font-size: .85rem;
       border: 1px solid;
+      animation: fadeSlide .3s ease both;
     }
 
-    .flash-success {
-      background: #22c55e18;
-      border-color: #22c55e44;
-      color: #22c55e;
+    @keyframes fadeSlide {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: none; }
     }
 
-    .flash-danger {
-      background: #ef444418;
-      border-color: #ef444444;
-      color: #ef4444;
-    }
+    .flash-success { background: #22c55e12; border-color: #22c55e30; color: #22c55e; }
+    .flash-danger  { background: #ef444412; border-color: #ef444430; color: #ef4444; }
+    .flash-warning { background: #f59e0b12; border-color: #f59e0b30; color: #f59e0b; }
+    .flash-info    { background: #3b82f612; border-color: #3b82f630; color: #3b82f6; }
 
-    .flash-warning {
-      background: #f59e0b18;
-      border-color: #f59e0b44;
-      color: #f59e0b;
-    }
-
-    .flash-info {
-      background: #3b82f618;
-      border-color: #3b82f644;
-      color: #3b82f6;
-    }
-
+    /* Footer */
     footer {
       text-align: center;
       padding: 2rem 1rem;
       color: var(--text-muted);
-      font-size: .8rem;
+      font-size: .78rem;
       border-top: 1px solid var(--border);
       margin-top: 3rem;
+      letter-spacing: .01em;
     }
 
     .noise {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
+      position: fixed; inset: 0;
+      pointer-events: none; z-index: 0;
+      opacity: .018;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.03'/%3E%3C/svg%3E");
-      opacity: .4;
     }
 
-    .container-xl {
-      max-width: 1200px;
-    }
-
-    .val-nav-btn {
-      background: linear-gradient(135deg, #3b82f6, #6366f1) !important;
-      color: #fff !important;
-      padding: .32rem .85rem !important;
-      border-radius: 20px !important;
-      font-weight: 600 !important;
-      font-size: .82rem !important;
-      letter-spacing: .03em;
-      display: inline-flex;
-      align-items: center;
-      gap: .35rem;
-      transition: opacity .2s !important;
-    }
-
-    .val-nav-btn:hover {
-      opacity: .82 !important;
-      color: #fff !important;
-    }
+    .container-xl { max-width: 1200px; }
   </style>
 
   {% block head %}{% endblock %}
@@ -206,7 +205,7 @@
 
   <nav class="app-nav">
     <a href="/" class="nav-brand">
-      <span class="brand-icon">◈</span>
+      <span class="brand-dot"></span>
       Intrinsic<span class="brand-accent">AI</span>
     </a>
     <div class="nav-links">
@@ -215,9 +214,8 @@
       <a href="/predict">Predict</a>
       <a href="/xai">XAI</a>
       <a href="/history">History</a>
-      <a href="/metrics">Metrics</a>
       <a href="/valuation/dashboard" class="val-nav-btn">
-        <i class="fas fa-chart-line"></i> Valuation
+        <i class="fas fa-chart-line" style="font-size:.78rem"></i> Valuation
       </a>
       <a href="/logout">Logout</a>
       {% else %}
@@ -225,7 +223,6 @@
       <a href="/register">Register</a>
       {% endif %}
     </div>
-
   </nav>
 
   <div class="flash-wrap">
